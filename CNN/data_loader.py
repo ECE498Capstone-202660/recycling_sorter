@@ -7,32 +7,35 @@ import shutil
 import csv
 import random
 
+# 🔹 Custom dataset class
 class WasteDataset(Dataset):
-    def __init__(self, csv_file, img_dir, transform=None, trash_transform=None):
+    def __init__(self, csv_file, img_dir, transform=None, stage1=False, recycle_only=False):
         self.data = pd.read_csv(csv_file)
+        if recycle_only:
+            self.data = self.data[self.data["label"].isin([0, 1, 2, 3, 4])]
         self.img_dir = img_dir
         self.transform = transform
-        self.trash_transform = trash_transform
+        self.stage1 = stage1  # If True: label becomes 0 (recycle) or 1 (trash)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
         img_name = os.path.join(self.img_dir, self.data.iloc[idx, 0])
-        image = Image.open(img_name).convert('RGB')  # Convert image to RGB
-        label = self.data.iloc[idx, 1]
+        image = Image.open(img_name).convert('RGB')
+        label = int(self.data.iloc[idx, 1])
 
-        # Apply trash-specific augmentation if label is "trash" (label = 5)
-        if self.trash_transform and label == 5:
-            image = self.trash_transform(image)
-        elif self.transform:
+        if self.stage1:
+            label = 0 if label in [0, 1, 2, 3, 4] else 1  # Recycle vs Trash
+
+        if self.transform:
             image = self.transform(image)
 
         return image, label
 
 
+# 🔹 Splitting images into train/val/test
 def split_data(original_images_dir, data_dir, train_ratio=0.7, val_ratio=0.2):
-    """Split images into train, val, and test sets."""
     class_mapping = {
         "cardboard": 0,
         "glass": 1,
@@ -69,8 +72,8 @@ def split_data(original_images_dir, data_dir, train_ratio=0.7, val_ratio=0.2):
                     shutil.copy(src, dst)
 
 
+# 🔹 Generate CSVs from image folder structure
 def generate_csv(data_dir, split):
-    """Generate CSV file based on folder structure."""
     class_mapping = {
         "cardboard": 0,
         "glass": 1,
@@ -79,6 +82,7 @@ def generate_csv(data_dir, split):
         "plastic": 4,
         "trash": 5
     }
+
     split_dir = os.path.join(data_dir, split)
     img_dir = os.path.join(split_dir, "images")
     csv_path = os.path.join(split_dir, f"{split}_labels.csv")
@@ -86,40 +90,27 @@ def generate_csv(data_dir, split):
     data = []
     for img_file in os.listdir(img_dir):
         if img_file.lower().endswith((".jpg", ".jpeg", ".png", ".bmp")):
-            # Extract the category from the filename prefix
             category = img_file.split("_")[0].lower()
             if category in class_mapping:
                 label = class_mapping[category]
                 data.append([img_file, label])
 
-    # Write CSV file
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["filename", "label"])
         writer.writerows(data)
 
 
-def get_data_loaders(data_dir, batch_size=32):
-    """Create data loaders for train, validation, and test sets."""
+# 🔹 General-purpose loader (supports both Stage 1 and Stage 2)
+def get_data_loaders(data_dir, batch_size=32, stage1=False, recycle_only=False):
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
-    train_transform = transforms.Compose([
+    transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
-    ])
-
-    trash_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(20),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
-        transforms.RandomAffine(degrees=10, translate=(0.2, 0.2)),
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std)
     ])
@@ -130,28 +121,28 @@ def get_data_loaders(data_dir, batch_size=32):
         transforms.Normalize(mean=mean, std=std)
     ])
 
-    # Generate CSV files for train, validation, and test sets
-    generate_csv(data_dir, "train")
-    generate_csv(data_dir, "val")
-    generate_csv(data_dir, "test")
-
     train_dataset = WasteDataset(
         csv_file=os.path.join(data_dir, "train", "train_labels.csv"),
         img_dir=os.path.join(data_dir, "train", "images"),
-        transform=train_transform,
-        trash_transform=trash_transform  # Apply trash-specific augmentation
+        transform=transform,
+        stage1=stage1,
+        recycle_only=recycle_only
     )
 
     val_dataset = WasteDataset(
         csv_file=os.path.join(data_dir, "val", "val_labels.csv"),
         img_dir=os.path.join(data_dir, "val", "images"),
-        transform=val_transform
+        transform=val_transform,
+        stage1=stage1,
+        recycle_only=recycle_only
     )
 
     test_dataset = WasteDataset(
         csv_file=os.path.join(data_dir, "test", "test_labels.csv"),
         img_dir=os.path.join(data_dir, "test", "images"),
-        transform=val_transform
+        transform=val_transform,
+        stage1=stage1,
+        recycle_only=recycle_only
     )
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
