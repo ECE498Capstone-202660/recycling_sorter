@@ -1,1 +1,3 @@
-CNN/best_model.pth
+*.pth
+__pycache__/
+*.pyc
