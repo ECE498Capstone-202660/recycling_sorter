@@ -1,107 +1,149 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import pandas as pd
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
+from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+from data_loader import get_data_loaders
+import os
 
-class DepthwiseSeparableConv(nn.Module):
-    """Depthwise Separable Convolution block"""
-    def __init__(self, in_channels, out_channels, stride=1):
-        super(DepthwiseSeparableConv, self).__init__()
-        
-        # Depthwise convolution
-        self.depthwise = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, 
-                     stride=stride, padding=1, groups=in_channels, bias=False),
-            nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True)
-        )
-        
-        # Pointwise convolution
-        self.pointwise = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
+CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
 
-    def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        return x
+def compute_class_weights(data_dir, num_classes=6):
+    counts = [0] * num_classes
+    for split in ["train", "val", "test"]:
+        csv_file = os.path.join(data_dir, split, f"{split}_labels.csv")
+        if os.path.exists(csv_file):
+            labels = pd.read_csv(csv_file)["label"]
+            for label in labels:
+                if 0 <= label < num_classes:
+                    counts[label] += 1
+    total = sum(counts)
+    return torch.tensor([total / c if c > 0 else 0 for c in counts], dtype=torch.float)
 
-class CustomMobileNet(nn.Module):
-    def __init__(self, num_classes=12):
-        super(CustomMobileNet, self).__init__()
-        
-        # Initial convolution layer
-        self.init_conv = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True)
-        )
-        
-        # Stage 1
-        self.stage1 = nn.Sequential(
-            DepthwiseSeparableConv(32, 64, stride=1),
-            DepthwiseSeparableConv(64, 64, stride=1)
-        )
-        
-        # Stage 2
-        self.stage2 = nn.Sequential(
-            DepthwiseSeparableConv(64, 128, stride=2),
-            DepthwiseSeparableConv(128, 128, stride=1)
-        )
-        
-        # Stage 3
-        self.stage3 = nn.Sequential(
-            DepthwiseSeparableConv(128, 256, stride=2),
-            DepthwiseSeparableConv(256, 256, stride=1)
-        )
-        
-        # Stage 4
-        self.stage4 = nn.Sequential(
-            DepthwiseSeparableConv(256, 512, stride=2),
-            DepthwiseSeparableConv(512, 512, stride=1)
-        )
-        
-        # Final layers
-        self.final_conv = nn.Sequential(
-            nn.Conv2d(512, 1024, kernel_size=1, bias=False),
-            nn.BatchNorm2d(1024),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.classifier = nn.Sequential(
-            nn.Dropout(0.2),
-            nn.Linear(1024, 512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.2),
-            nn.Linear(512, num_classes)
-        )
+def plot_loss_curves(history, title):
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(history['train_loss'], label='Train Loss')
+    plt.plot(history['val_loss'], label='Val Loss')
+    plt.title(f'{title} Loss')
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(history['train_acc'], label='Train Acc')
+    plt.plot(history['val_acc'], label='Val Acc')
+    plt.title(f'{title} Accuracy')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"{title.replace(' ', '_').lower()}_training_curves.png")
+    plt.close()
 
-    def forward(self, x):
-        # Initial convolution
-        x = self.init_conv(x)
-        
-        # Stage 1: 32 -> 64
-        x = self.stage1(x)
-        
-        # Stage 2: 64 -> 128
-        x = self.stage2(x)
-        
-        # Stage 3: 128 -> 256
-        x = self.stage3(x)
-        
-        # Stage 4: 256 -> 512
-        x = self.stage4(x)
-        
-        # Final processing
-        x = self.final_conv(x)
-        x = self.avg_pool(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        
-        return x
+def plot_confusion_matrix(y_true, y_pred, classes, title):
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', xticklabels=classes, yticklabels=classes, cmap='Blues')
+    plt.title(title)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.tight_layout()
+    plt.savefig(f"{title.replace(' ', '_').lower()}_confusion_matrix.png")
+    plt.close()
 
-def get_mobilenet_model(num_classes=12):
-    """Helper function to create and return the model"""
-    return CustomMobileNet(num_classes=num_classes) 
+def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=50, patience=10):
+    best_acc = 0.0
+    early_stop_counter = 0
+    history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
+
+    for epoch in range(num_epochs):
+        model.train()
+        train_loss, correct, total = 0, 0, 0
+        for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
+            optimizer.zero_grad()
+            out = model(x)
+            loss = criterion(out, y)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+            correct += (out.argmax(1) == y).sum().item()
+            total += y.size(0)
+        train_acc = 100. * correct / total
+
+        model.eval()
+        val_loss, correct, total = 0, 0, 0
+        with torch.no_grad():
+            for x, y in val_loader:
+                x, y = x.to(device), y.to(device)
+                out = model(x)
+                val_loss += criterion(out, y).item()
+                correct += (out.argmax(1) == y).sum().item()
+                total += y.size(0)
+        val_acc = 100. * correct / total
+        scheduler.step(val_loss)
+
+        history['train_loss'].append(train_loss / len(train_loader))
+        history['val_loss'].append(val_loss / len(val_loader))
+        history['train_acc'].append(train_acc)
+        history['val_acc'].append(val_acc)
+
+        print(f"Epoch {epoch+1:02d}: Train Acc={train_acc:.2f}%, Val Acc={val_acc:.2f}%")
+
+        if val_acc > best_acc:
+            best_acc = val_acc
+            torch.save(model.state_dict(), "best_mobile_model.pth")
+            early_stop_counter = 0
+            print(f" ✔️ New best model saved with Val Acc={val_acc:.2f}%")
+        else:
+            early_stop_counter += 1
+            print(f" No improvement ({early_stop_counter}/{patience})")
+            if early_stop_counter >= patience:
+                print(f" ❗ Early stopping at epoch {epoch+1}")
+                break
+    return history
+
+def evaluate_model(model, test_loader, criterion, device):
+    model.eval()
+    test_loss, preds, labels = 0, [], []
+    with torch.no_grad():
+        for x, y in test_loader:
+            x, y = x.to(device), y.to(device)
+            out = model(x)
+            test_loss += criterion(out, y).item()
+            preds.extend(out.argmax(1).cpu().tolist())
+            labels.extend(y.cpu().tolist())
+    acc = 100. * sum(p == l for p, l in zip(preds, labels)) / len(labels)
+    print(f"Test Loss: {test_loss / len(test_loader):.4f}, Test Accuracy: {acc:.2f}%")
+    return preds, labels
+
+def main():
+    data_dir = "data"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Using device: {device}")
+
+    train_loader, val_loader, test_loader = get_data_loaders(data_dir, batch_size=32)
+    class_weights = compute_class_weights(data_dir, num_classes=6).to(device)
+
+    # 🧠 Load MobileNetV2
+    model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
+    model.classifier = nn.Sequential(
+        nn.Dropout(0.2),
+        nn.Linear(model.last_channel, 6)  # 6 classes
+    )
+    model = model.to(device)
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+
+    history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device)
+    plot_loss_curves(history, "MobileNetV2 Classification")
+
+    model.load_state_dict(torch.load("best_mobile_model.pth"))
+    preds, labels = evaluate_model(model, test_loader, criterion, device)
+    plot_confusion_matrix(labels, preds, CATEGORIES, "MobileNetV2 Classification")
+    print("\n" + classification_report(labels, preds, target_names=CATEGORIES))
+
+if __name__ == '__main__':
+    main()

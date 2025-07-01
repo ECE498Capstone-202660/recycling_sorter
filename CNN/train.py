@@ -130,7 +130,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
 
-    history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=50, patience=10)
+    history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=80, patience=10)
     plot_loss_curves(history, "One Stage Classification")
 
     model.load_state_dict(torch.load("best_model.pth"))
