@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
-import pandas as pd
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from model1 import MaterialClassifier
+from model import MaterialClassifier
 from data_loader import get_data_loaders
 import os
-import time
+import pandas as pd
 
 CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
 
@@ -52,18 +51,17 @@ def plot_confusion_matrix(y_true, y_pred, classes, title):
     plt.savefig(f"{title.replace(' ', '_').lower()}_confusion_matrix.png")
     plt.close()
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=80, patience=10):
+def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=80):
     best_acc = 0.0
-    early_stop_counter = 0
     history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
 
     for epoch in range(num_epochs):
         model.train()
         train_loss, correct, total = 0, 0, 0
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+        for (x, w), y in train_loader:
+            x, w, y = x.to(device), w.to(device), y.to(device)
             optimizer.zero_grad()
-            out = model(x)
+            out = model(x, w)
             loss = criterion(out, y)
             loss.backward()
             optimizer.step()
@@ -75,9 +73,9 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         model.eval()
         val_loss, correct, total = 0, 0, 0
         with torch.no_grad():
-            for x, y in val_loader:
-                x, y = x.to(device), y.to(device)
-                out = model(x)
+            for (x, w), y in val_loader:
+                x, w, y = x.to(device), w.to(device), y.to(device)
+                out = model(x, w)
                 val_loss += criterion(out, y).item()
                 correct += (out.argmax(1) == y).sum().item()
                 total += y.size(0)
@@ -90,21 +88,20 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         history['val_acc'].append(val_acc)
 
         print(f"Epoch {epoch+1:02d}: Train Acc={train_acc:.2f}%, Val Acc={val_acc:.2f}%")
-
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), "best_model.pth")
-            early_stop_counter = 0
             print(f" New best model saved with Val Acc={val_acc:.2f}%")
+
     return history
 
 def evaluate_model(model, test_loader, criterion, device):
     model.eval()
     test_loss, preds, labels = 0, [], []
     with torch.no_grad():
-        for x, y in test_loader:
-            x, y = x.to(device), y.to(device)
-            out = model(x)
+        for (x, w), y in test_loader:
+            x, w, y = x.to(device), w.to(device), y.to(device)
+            out = model(x, w)
             test_loss += criterion(out, y).item()
             preds.extend(out.argmax(1).cpu().tolist())
             labels.extend(y.cpu().tolist())
@@ -118,13 +115,14 @@ def main():
     print(f"[INFO] Using device: {device}")
 
     train_loader, val_loader, test_loader = get_data_loaders(data_dir, batch_size=32)
-    class_weights = compute_class_weights(data_dir, num_classes=6).to(device)
+    class_weights = compute_class_weights(data_dir).to(device)
+
     model = MaterialClassifier(num_classes=6).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
 
-    history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=80, patience=10)
+    history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device)
     plot_loss_curves(history, "One Stage Classification")
 
     model.load_state_dict(torch.load("best_model.pth"))

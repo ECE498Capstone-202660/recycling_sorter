@@ -1,11 +1,19 @@
 import os
 import pandas as pd
+import torch
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-import shutil
-import csv
 import random
+
+CATEGORY_WEIGHTS = {
+    0: (30, 60),     # Cardboard
+    1: (100, 200),   # Glass
+    2: (10, 30),     # Metal
+    3: (4, 6),       # Paper
+    4: (15, 20),     # Plastic
+    5: (5, 25),      # Trash
+}
 
 class WasteDataset(Dataset):
     def __init__(self, csv_file, img_dir, transform=None):
@@ -17,12 +25,25 @@ class WasteDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        img_name = os.path.join(self.img_dir, self.data.iloc[idx, 0])
-        image = Image.open(img_name).convert('RGB')
+        img_path = os.path.join(self.img_dir, self.data.iloc[idx, 0])
+        image = Image.open(img_path).convert("RGB")
         label = int(self.data.iloc[idx, 1])
+        weight = float(self.data.iloc[idx, 2])
         if self.transform:
             image = self.transform(image)
-        return image, label
+        return (image, torch.tensor([weight], dtype=torch.float32)), label
+
+def _inject_weight_column(csv_path):
+    df = pd.read_csv(csv_path)
+    if "weight" in df.columns:
+        return  # already injected
+
+    weights = []
+    for label in df["label"]:
+        low, high = CATEGORY_WEIGHTS[label]
+        weights.append(round(random.uniform(low, high), 2))
+    df["weight"] = weights
+    df.to_csv(csv_path, index=False)
 
 def get_data_loaders(data_dir, batch_size=32):
     mean = [0.485, 0.456, 0.406]
@@ -44,8 +65,10 @@ def get_data_loaders(data_dir, batch_size=32):
     ])
 
     def make_loader(split, transform):
+        csv_file = os.path.join(data_dir, split, f"{split}_labels.csv")
+        _inject_weight_column(csv_file)
         dataset = WasteDataset(
-            csv_file=os.path.join(data_dir, split, f"{split}_labels.csv"),
+            csv_file=csv_file,
             img_dir=os.path.join(data_dir, split, "images"),
             transform=transform
         )

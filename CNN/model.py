@@ -58,21 +58,21 @@ class MaterialClassifier(nn.Module):
         )
 
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
+
         self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(512, 256),
+            nn.Linear(512 + 1, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(256, num_classes)
         )
 
-    def forward(self, x):
+    def forward(self, x, weight):
         x = self.initial(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.pool(x)
-        x = self.classifier(x)
-        return x
-
+        x = x.view(x.size(0), -1)
+        x = torch.cat((x, weight), dim=1)
+        return self.classifier(x)
