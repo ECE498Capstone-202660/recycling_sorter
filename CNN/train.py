@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from model import MaterialClassifier
+from model1 import MaterialClassifier
 from data_loader import get_data_loaders
 import os
 import time
@@ -96,12 +96,6 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
             torch.save(model.state_dict(), "best_model.pth")
             early_stop_counter = 0
             print(f" New best model saved with Val Acc={val_acc:.2f}%")
-        # else:
-        #     early_stop_counter += 1
-        #     print(f" No improvement ({early_stop_counter}/{patience})")
-        #     if early_stop_counter >= patience:
-        #         print(f" Early stopping at epoch {epoch+1}")
-        #         break
     return history
 
 def evaluate_model(model, test_loader, criterion, device):
@@ -119,7 +113,7 @@ def evaluate_model(model, test_loader, criterion, device):
     return preds, labels
 
 def main():
-    data_dir = "C:/Users/10640/recycling_sorter_sw/CNN/data"
+    data_dir = "data"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}")
 
