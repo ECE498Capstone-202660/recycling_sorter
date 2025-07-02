@@ -11,7 +11,7 @@ CATEGORY_WEIGHTS = {
     1: (100, 200),   # Glass
     2: (10, 30),     # Metal
     3: (4, 6),       # Paper
-    4: (15, 20),     # Plastic
+    4: (10, 30),     # Plastic
     5: (5, 25),      # Trash
 }
 
