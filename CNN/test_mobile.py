@@ -1,18 +1,18 @@
 import torch
-from torchvision import transforms
+from torchvision import transforms, models
 from PIL import Image
 import os
 import time
-from model import MaterialClassifier  # Replace with your model file if different
+import torch.nn as nn
 
 # === 1. Setup ===
 CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
-MODEL_PATH = "best_model.pth"  # your trained model best_simple_model.pth
+MODEL_PATH = "best_mobile_model.pth"  # Your trained MobileNetV2 model
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # === 2. Image transform ===
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # Match training input size
+    transforms.Resize((224, 224)),  # MobileNetV2 default input size
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
@@ -20,37 +20,35 @@ transform = transforms.Compose([
 
 # === 3. Load model ===
 def load_model():
-    model = MaterialClassifier(num_classes=len(CATEGORIES))
+    model = models.mobilenet_v2(pretrained=False)
+    model.classifier[1] = nn.Linear(model.last_channel, len(CATEGORIES))  # 6 output classes
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model
 
-# === 4. Predict one image + weight + time ===
-def predict_image(model, image_path, weight_grams):
+# === 4. Predict one image (inference time included) ===
+def predict_image(model, image_path):
     img = Image.open(image_path).convert("RGB")
     img_tensor = transform(img).unsqueeze(0).to(DEVICE)
 
-    # Normalize or scale the weight if needed
-    weight_tensor = torch.tensor([[weight_grams]], dtype=torch.float32).to(DEVICE)
-
     start_time = time.time()
     with torch.no_grad():
-        outputs = model(img_tensor, weight_tensor)
+        outputs = model(img_tensor)
         pred_idx = torch.argmax(outputs, dim=1).item()
         confidence = torch.softmax(outputs, dim=1)[0][pred_idx].item()
     end_time = time.time()
 
-    inference_time = end_time - start_time  # in seconds
+    inference_time = end_time - start_time
     return CATEGORIES[pred_idx], confidence, inference_time
 
-# === 5. Predict multiple images in a folder and track timing ===
-def predict_folder(model, folder_path, weight=100.0):
+# === 5. Predict multiple images in folder ===
+def predict_folder(model, folder_path):
     times = []
     for file in os.listdir(folder_path):
         if file.lower().endswith((".jpg", ".jpeg", ".png")):
             full_path = os.path.join(folder_path, file)
-            label, conf, infer_time = predict_image(model, full_path, weight)
+            label, conf, infer_time = predict_image(model, full_path)
             times.append(infer_time)
             print(f"{file} -> {label} ({conf*100:.2f}%), Time: {infer_time*1000:.2f} ms")
     if times:
@@ -63,9 +61,8 @@ if __name__ == "__main__":
 
     # --- Single image test ---
     test_img = "data/test/images/glass_478.jpg"
-    test_weight = 150.0  # grams
-    label, conf, infer_time = predict_image(model, test_img, test_weight)
+    label, conf, infer_time = predict_image(model, test_img)
     print(f"{test_img} -> {label} ({conf*100:.2f}%), Time: {infer_time*1000:.2f} ms")
 
     # --- Folder test (optional) ---
-    # predict_folder(model, "inference_images/", weight=120.0)
+    # predict_folder(model, "inference_images/")

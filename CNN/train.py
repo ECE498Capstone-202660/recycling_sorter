@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from model import MaterialClassifier
+from model_simple import MaterialClassifier
 from data_loader import get_data_loaders
 import os
 import pandas as pd
@@ -90,7 +90,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         print(f"Epoch {epoch+1:02d}: Train Acc={train_acc:.2f}%, Val Acc={val_acc:.2f}%")
         if val_acc > best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), "best_model.pth")
+            torch.save(model.state_dict(), "best_simple_model.pth")
             print(f" New best model saved with Val Acc={val_acc:.2f}%")
 
     return history
@@ -125,7 +125,7 @@ def main():
     history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device)
     plot_loss_curves(history, "One Stage Classification")
 
-    model.load_state_dict(torch.load("best_model.pth"))
+    model.load_state_dict(torch.load("best_simple_model.pth"))
     preds, labels = evaluate_model(model, test_loader, criterion, device)
     plot_confusion_matrix(labels, preds, CATEGORIES, "One Stage Classification")
     print("\n" + classification_report(labels, preds, target_names=CATEGORIES))
