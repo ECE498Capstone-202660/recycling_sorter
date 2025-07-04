@@ -60,8 +60,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
     for epoch in range(num_epochs):
         model.train()
         train_loss, correct, total = 0, 0, 0
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+        for batch in train_loader:
+            x, y = batch[0].to(device), batch[1].to(device)
             optimizer.zero_grad()
             out = model(x)
             loss = criterion(out, y)
@@ -75,8 +75,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         model.eval()
         val_loss, correct, total = 0, 0, 0
         with torch.no_grad():
-            for x, y in val_loader:
-                x, y = x.to(device), y.to(device)
+            for batch in val_loader:
+                x, y = batch[0].to(device), batch[1].to(device)
                 out = model(x)
                 val_loss += criterion(out, y).item()
                 correct += (out.argmax(1) == y).sum().item()
@@ -93,7 +93,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
 
         if val_acc > best_acc:
             best_acc = val_acc
-            torch.save(model.state_dict(), "best_model.pth")
+            torch.save(model.state_dict(), "best_res_model.pth")
             early_stop_counter = 0
             print(f" ✔️ New best model saved with Val Acc={val_acc:.2f}%")
         else:
@@ -108,8 +108,8 @@ def evaluate_model(model, test_loader, criterion, device):
     model.eval()
     test_loss, preds, labels = 0, [], []
     with torch.no_grad():
-        for x, y in test_loader:
-            x, y = x.to(device), y.to(device)
+        for batch in test_loader:
+            x, y = batch[0].to(device), batch[1].to(device)
             out = model(x)
             test_loss += criterion(out, y).item()
             preds.extend(out.argmax(1).cpu().tolist())
@@ -126,13 +126,12 @@ def main():
     train_loader, val_loader, test_loader = get_data_loaders(data_dir, batch_size=32)
     class_weights = compute_class_weights(data_dir, num_classes=6).to(device)
 
-    # 🧠 Load pretrained ResNet50 and replace the final FC layer
     model = resnet50(weights=ResNet50_Weights.DEFAULT)
     model.fc = nn.Sequential(
         nn.Linear(model.fc.in_features, 256),
         nn.ReLU(inplace=True),
         nn.Dropout(0.4),
-        nn.Linear(256, 6)  # 6 classes
+        nn.Linear(256, 6)
     )
     model = model.to(device)
 
@@ -143,7 +142,7 @@ def main():
     history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device)
     plot_loss_curves(history, "ResNet50 Classification")
 
-    model.load_state_dict(torch.load("best_model.pth"))
+    model.load_state_dict(torch.load("best_res_model.pth"))
     preds, labels = evaluate_model(model, test_loader, criterion, device)
     plot_confusion_matrix(labels, preds, CATEGORIES, "ResNet50 Classification")
     print("\n" + classification_report(labels, preds, target_names=CATEGORIES))

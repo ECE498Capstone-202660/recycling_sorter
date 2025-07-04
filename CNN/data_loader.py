@@ -12,7 +12,7 @@ CATEGORY_WEIGHTS = {
     2: (10, 30),     # Metal
     3: (4, 6),       # Paper
     4: (10, 30),     # Plastic
-    5: (5, 25),      # Trash
+    5: (5, 50),      # Trash
 }
 
 class WasteDataset(Dataset):
