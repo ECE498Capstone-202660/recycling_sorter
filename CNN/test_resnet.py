@@ -1,16 +1,14 @@
 import torch
-from torchvision import transforms
+from torchvision import transforms, models
 from PIL import Image
 import os
 import time
 import torch.nn as nn
 import pandas as pd
-from mobilenet import MaterialClassifier  # Use your own model definition
 
 # === 1. Setup ===
 CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
-MODEL_PATH = "best_cm_model.pth"
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MODEL_PATH = "best_model.pth"
 DEVICE = torch.device("cpu")
 print("Using device:", DEVICE)
 
@@ -24,21 +22,26 @@ transform = transforms.Compose([
 
 # === 3. Load model ===
 def load_model():
-    model = MaterialClassifier(num_classes=len(CATEGORIES))
+    model = models.resnet50(pretrained=False)
+    model.fc = nn.Sequential(
+        nn.Linear(model.fc.in_features, 256),
+        nn.ReLU(inplace=True),
+        nn.Dropout(0.4),
+        nn.Linear(256, len(CATEGORIES))
+    )
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.to(DEVICE)
     model.eval()
     return model
 
-# === 4. Predict one image with weight ===
-def predict_image(model, image_path, weight_grams):
+# === 4. Predict one image (timed) ===
+def predict_image(model, image_path):
     img = Image.open(image_path).convert("RGB")
     img_tensor = transform(img).unsqueeze(0).to(DEVICE)
-    weight_tensor = torch.tensor([[weight_grams]], dtype=torch.float32).to(DEVICE)
 
     start_time = time.time()
     with torch.no_grad():
-        outputs = model(img_tensor, weight_tensor)
+        outputs = model(img_tensor)
         pred_idx = torch.argmax(outputs, dim=1).item()
         confidence = torch.softmax(outputs, dim=1)[0][pred_idx].item()
     end_time = time.time()
@@ -46,7 +49,7 @@ def predict_image(model, image_path, weight_grams):
     inference_time = end_time - start_time
     return CATEGORIES[pred_idx], confidence, inference_time
 
-# === 5. Evaluate test set from CSV (includes weight) ===
+# === 5. Evaluate test set from CSV ===
 def evaluate_test_set(model, label_csv_path, image_folder):
     df = pd.read_csv(label_csv_path)
     correct = 0
@@ -54,18 +57,16 @@ def evaluate_test_set(model, label_csv_path, image_folder):
     total_time = 0.0
 
     for idx, row in df.iterrows():
-        filename = row["filename"]
-        true_label = int(row["label"])
-        weight = float(row["weight"])
+        filename, true_label = row["filename"], row["label"]
         image_path = os.path.join(image_folder, filename)
 
         if not os.path.exists(image_path):
             print(f"Warning: File {image_path} not found, skipping.")
             continue
 
-        pred_label, conf, infer_time = predict_image(model, image_path, weight)
+        pred_label, conf, infer_time = predict_image(model, image_path)
 
-        true_label_name = CATEGORIES[true_label]
+        true_label_name = CATEGORIES[int(true_label)]
         is_correct = (pred_label.lower() == true_label_name.lower())
 
         total += 1
@@ -73,8 +74,7 @@ def evaluate_test_set(model, label_csv_path, image_folder):
         correct += int(is_correct)
 
         print(f"{filename} -> Predicted: {pred_label} ({conf*100:.2f}%), "
-              f"True: {true_label_name}, Weight: {weight:.1f}g, Correct: {is_correct}, "
-              f"Time: {infer_time*1000:.2f} ms")
+              f"True: {true_label_name}, Correct: {is_correct}, Time: {infer_time*1000:.2f} ms")
 
     accuracy = correct / total * 100 if total > 0 else 0
     avg_time = total_time / total * 1000 if total > 0 else 0
@@ -87,9 +87,8 @@ if __name__ == "__main__":
     model = load_model()
 
     # Optional warm-up
-    _ = predict_image(model, "data/test/images/glass_478.jpg", 120.0)
+    _ = predict_image(model, "data/test/images/glass_478.jpg")
 
-    # Evaluate full test set using filename, label, and weight
     evaluate_test_set(
         model,
         label_csv_path="data/test/test_labels.csv",
