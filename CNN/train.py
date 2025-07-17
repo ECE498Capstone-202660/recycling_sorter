@@ -5,12 +5,19 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from mobilenet import MaterialClassifier
+from model_simple import MaterialClassifier
 from data_loader import get_data_loaders
 import os
 import pandas as pd
 
-CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
+CATEGORIES = [
+    "Cardboard-S", "Cardboard-L",
+    "Glass-S", "Glass-L",
+    "Metal-S", "Metal-L",
+    "Paper-S", "Paper-L",
+    "Plastic-S", "Plastic-L",
+    "Trash-S", "Trash-L"
+]
 
 def compute_class_weights(data_dir, num_classes=6):
     counts = [0] * num_classes
@@ -117,7 +124,7 @@ def main():
     train_loader, val_loader, test_loader = get_data_loaders(data_dir, batch_size=32)
     class_weights = compute_class_weights(data_dir).to(device)
 
-    model = MaterialClassifier(num_classes=6).to(device)
+    model = MaterialClassifier(num_classes=12).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)

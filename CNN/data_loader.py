@@ -25,13 +25,23 @@ class WasteDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.data.iloc[idx, 0])
+        filename = self.data.iloc[idx, 0]
+        label_6 = int(self.data.iloc[idx, 1])
+        img_path = os.path.join(self.img_dir, filename)
         image = Image.open(img_path).convert("RGB")
-        label = int(self.data.iloc[idx, 1])
-        weight = float(self.data.iloc[idx, 2])
+
+        base = os.path.splitext(filename)[0]
+        name_part, num_part = base.rsplit("_", 1)
+        number = int(num_part)
+
+        size_type = 0 if number <= 20 else 1
+        label_12 = label_6 * 2 + size_type
+
         if self.transform:
             image = self.transform(image)
-        return (image, torch.tensor([weight], dtype=torch.float32)), label
+
+        return (image, torch.tensor([number], dtype=torch.float32)), label_12
+
 
 def _inject_weight_column(csv_path):
     df = pd.read_csv(csv_path)

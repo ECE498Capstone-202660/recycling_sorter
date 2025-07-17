@@ -8,7 +8,14 @@ import pandas as pd
 from mobilenet import MaterialClassifier  # Use your own model definition
 
 # === 1. Setup ===
-CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
+CATEGORIES = [
+    "Cardboard-S", "Cardboard-L",
+    "Glass-S", "Glass-L",
+    "Metal-S", "Metal-L",
+    "Paper-S", "Paper-L",
+    "Plastic-S", "Plastic-L",
+    "Trash-S", "Trash-L"
+]
 MODEL_PATH = "best_cm_model.pth"
 # DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device("cpu")
