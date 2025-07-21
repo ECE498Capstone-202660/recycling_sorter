@@ -1,58 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import styles from './HomeScreen.styles';
-
-const images = [
-  {
-    src: require('../../assets/plastic_bottle.jpg'),
-    result: {
-      material: 'Plastic Bottle',
-      category: 'Plastic',
-      rebate: 0.10,
-      confidence: 0.97
-    }
-  },
-  {
-    src: require('../../assets/aluminum_can.jpg'),
-    result: {
-      material: 'Aluminum Can',
-      category: 'Metal',
-      rebate: 0.15,
-      confidence: 0.93
-    }
-  },
-  {
-    src: require('../../assets/cardboard_box.jpg'),
-    result: {
-      material: 'Cardboard Box',
-      category: 'Paper',
-      rebate: 0.05,
-      confidence: 0.89
-    }
-  }
-];
+import { useLatestResultsWebSocket } from '../../hooks/useLatestResultsWebSocket';
 
 const HomeScreen = ({ navigation }: any) => {
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState(0);
-  const [loading, setLoading] = useState(false);
+
+  useLatestResultsWebSocket(setResults, setLoading);
+
+  // Only reset current index if results length changes or current is out of bounds
+  useEffect(() => {
+    if (current >= results.length) {
+      setCurrent(0);
+    }
+  }, [results.length, current]);
+
+  const hasResults = results.length > 0;
+  const currentResult = hasResults ? results[current] : null;
+  const canFlip = results.length > 1;
 
   const handleFlip = (direction: 'left' | 'right') => {
-    setLoading(true);
-    setTimeout(() => {
-      setCurrent(prev => {
-        if (direction === 'left') {
-          return prev === 0 ? images.length - 1 : prev - 1;
-        } else {
-          return prev === images.length - 1 ? 0 : prev + 1;
-        }
-      });
-      setLoading(false);
-    }, 600); // Simulate loading
+    setCurrent((prev) => {
+      if (direction === 'left') {
+        return prev === 0 ? results.length - 1 : prev - 1;
+      } else {
+        return prev === results.length - 1 ? 0 : prev + 1;
+      }
+    });
   };
-
-  const result = images[current].result;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,39 +42,47 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.uploadContainer}>
-          <Text style={styles.sectionTitle}>Sorting Ongoing</Text>
-          <View style={styles.previewContainer}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-              <TouchableOpacity onPress={() => handleFlip('left')} style={{ padding: 8 }}>
-                <MaterialIcons name="chevron-left" size={36} color="#4CAF50" />
-              </TouchableOpacity>
-              <Image source={images[current].src} style={styles.previewImage} />
-              <TouchableOpacity onPress={() => handleFlip('right')} style={{ padding: 8 }}>
-                <MaterialIcons name="chevron-right" size={36} color="#4CAF50" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          {loading && <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 10 }} />}
-          {!loading && result && (
-            <View style={styles.resultContainer}>
-              <Text style={styles.resultTitle}>Classification Result</Text>
-              <Text style={styles.resultText}>Material: <Text style={styles.resultValue}>{result.material}</Text></Text>
-              <Text style={styles.resultText}>Category: <Text style={styles.resultValue}>{result.category}</Text></Text>
-              <Text style={styles.resultText}>Rebate: <Text style={styles.resultValue}>${result.rebate.toFixed(2)}</Text></Text>
-              <Text style={styles.resultText}>Confidence: <Text style={styles.resultValue}>{(result.confidence * 100).toFixed(1)}%</Text></Text>
-              <View style={styles.feedbackRow}>
-                <TouchableOpacity style={styles.feedbackButton}>
-                  <MaterialIcons name="thumb-up" size={28} color="#4CAF50" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.feedbackButton}>
-                  <MaterialIcons name="thumb-down" size={28} color="#f44336" />
-                </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Latest Classifications</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 10 }} />
+          ) : !hasResults ? (
+            <Text style={{ color: '#888', marginTop: 20 }}>No image classified yet.</Text>
+          ) : (
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                {canFlip && (
+                  <TouchableOpacity onPress={() => handleFlip('left')} style={{ padding: 8 }}>
+                    <MaterialIcons name="chevron-left" size={36} color="#4CAF50" />
+                  </TouchableOpacity>
+                )}
+                <Image
+                  source={{ uri: currentResult.image_url }}
+                  style={styles.previewImage}
+                />
+                {canFlip && (
+                  <TouchableOpacity onPress={() => handleFlip('right')} style={{ padding: 8 }}>
+                    <MaterialIcons name="chevron-right" size={36} color="#4CAF50" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={styles.resultContainer}>
+                <Text style={styles.resultTitle}>Classification Result</Text>
+                <Text style={styles.resultText}>Material: <Text style={styles.resultValue}>{currentResult.predicted_class}</Text></Text>
+                <Text style={styles.resultText}>Rebate: <Text style={styles.resultValue}>${currentResult.rebate?.toFixed(2) ?? '--'}</Text></Text>
+                <Text style={styles.resultText}>Confidence: <Text style={styles.resultValue}>{currentResult.confidence ?? '--'}</Text></Text>
+                <View style={styles.feedbackRow}>
+                  <TouchableOpacity style={styles.feedbackButton}>
+                    <MaterialIcons name="thumb-up" size={28} color="#4CAF50" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.feedbackButton}>
+                    <MaterialIcons name="thumb-down" size={28} color="#f44336" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
         </View>
 
-        {/* Keep stats and tips as before for now */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <MaterialIcons name="recycling" size={32} color="#4CAF50" />
@@ -105,7 +92,7 @@ const HomeScreen = ({ navigation }: any) => {
           <View style={styles.statCard}>
             <MaterialIcons name="eco" size={32} color="#4CAF50" />
             <Text style={styles.statNumber}>12.5</Text>
-            <Text style={styles.statLabel}>kg CO₂ Saved</Text>
+            <Text style={styles.statLabel}>kg CO 2 Saved</Text>
           </View>
         </View>
 

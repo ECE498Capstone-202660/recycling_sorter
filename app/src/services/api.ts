@@ -40,4 +40,9 @@ export async function createRebate(token: string, title: string, amount: number)
     body: JSON.stringify({ title, amount }),
   });
   return res.json();
+}
+
+export async function getLatestResult() {
+  const res = await fetch(`${API_URL}/model/latest-result`);
+  return res.json();
 } 
