@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: recycling-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: recycling_db
+      MYSQL_USER: fastapi_user
+      MYSQL_PASSWORD: password123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./server/mysql_data:/var/lib/mysql  # Persistent data folder
+
+  adminer:
+    image: adminer
+    container_name: recycling-adminer
+    restart: always
+    ports:
+      - "8090:8080"  # Adminer web UI
