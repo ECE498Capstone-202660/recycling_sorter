@@ -1,18 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import styles from './HomeScreen.styles';
-import { useLatestResultsWebSocket } from '../../hooks/useLatestResultsWebSocket';
+import React, { useState, useEffect } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import styles from "./HomeScreen.styles";
+import { useLatestResults } from "../../hooks/useLatestResults";
 
 const HomeScreen = ({ navigation }: any) => {
-  const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { results, loading } = useLatestResults();
   const [current, setCurrent] = useState(0);
 
-  useLatestResultsWebSocket(setResults, setLoading);
-
-  // Only reset current index if results length changes or current is out of bounds
   useEffect(() => {
     if (current >= results.length) {
       setCurrent(0);
@@ -42,7 +38,7 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.uploadContainer}>
-          <Text style={styles.sectionTitle}>Latest Classifications</Text>
+          <Text style={styles.sectionTitle}>Top 3 Latest Classifications</Text>
           {loading ? (
             <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 10 }} />
           ) : !hasResults ? (

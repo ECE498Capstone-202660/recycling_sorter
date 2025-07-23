@@ -1,25 +1,18 @@
-// const API_URL = "http://xxx.xxx.xxx.xxx:8080";
 const API_URL = "http://localhost:8080";
 
 export async function login(username: string, password: string) {
-  const formData = new FormData();
-  formData.append('username', username);
-  formData.append('password', password);
-  const res = await fetch(`${API_URL}/auth/login`, {
-    method: "POST",
-    body: formData,
-  });
+  const fd = new FormData();
+  fd.append("username", username);
+  fd.append("password", password);
+  const res = await fetch(`${API_URL}/auth/login`, { method: "POST", body: fd });
   return res.json();
 }
 
 export async function register(username: string, password: string) {
-  const formData = new FormData();
-  formData.append('username', username);
-  formData.append('password', password);
-  const res = await fetch(`${API_URL}/auth/register`, {
-    method: "POST",
-    body: formData,
-  });
+  const fd = new FormData();
+  fd.append("username", username);
+  fd.append("password", password);
+  const res = await fetch(`${API_URL}/auth/register`, { method: "POST", body: fd });
   return res.json();
 }
 
@@ -42,7 +35,12 @@ export async function createRebate(token: string, title: string, amount: number)
   return res.json();
 }
 
-export async function getLatestResult() {
-  const res = await fetch(`${API_URL}/model/latest-result`);
+export async function getLatestResults() {
+  const res = await fetch(`${API_URL}/classification/latest`);
+  return res.json();
+}
+
+export async function getHistory() {
+  const res = await fetch(`${API_URL}/classification/history`);
   return res.json();
 } 
