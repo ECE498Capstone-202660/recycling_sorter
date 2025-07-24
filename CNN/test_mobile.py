@@ -5,7 +5,8 @@ import os
 import time
 import torch.nn as nn
 import pandas as pd
-from model1 import MobileNetWithMass
+import sys
+from mobilenet import MobileNetWithMass
 
 # === 1. Setup ===
 CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
@@ -84,8 +85,21 @@ def evaluate_test_set(model, label_csv_path, image_folder):
 if __name__ == "__main__":
     model = load_model()
 
-    evaluate_test_set(
-        model,
-        label_csv_path="data/test/test_labels.csv",
-        image_folder="data/test/images"
-    )
+    if len(sys.argv) == 3:
+        # Usage: python test_mobile.py <image_path> <mass_value>
+        image_path = sys.argv[1]
+        mass_value = float(sys.argv[2])
+        if not os.path.exists(image_path):
+            print(f"Image {image_path} not found.")
+        else:
+            pred_label, conf, infer_time = predict_image(model, image_path, mass_value)
+            print(f"Single Image Inference:")
+            print(f"Predicted: {pred_label} ({conf*100:.2f}%)")
+            print(f"Inference Time: {infer_time*1000:.2f} ms")
+    else:
+        # Default: batch evaluation
+        evaluate_test_set(
+            model,
+            label_csv_path="data/test/test_labels.csv",
+            image_folder="data/test/images"
+        )

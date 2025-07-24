@@ -90,6 +90,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         print(f"Epoch {epoch+1:02d}: Train Acc={train_acc:.2f}%, Val Acc={val_acc:.2f}%")
         if val_acc > best_acc:
             best_acc = val_acc
+            model.eval()
             torch.save(model.state_dict(), "mobile_model.pth")
             print(f" New best model saved with Val Acc={val_acc:.2f}%")
 

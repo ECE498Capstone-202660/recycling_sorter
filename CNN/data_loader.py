@@ -9,10 +9,10 @@ import random
 
 # Updated CATEGORY_WEIGHTS and removed Cardboard
 CATEGORY_WEIGHTS = {
-    0: (100, 260),   # Glass
+    0: (200, 280),   # Glass
     1: (14, 18),     # Metal
     2: (5, 12),      # Paper
-    3: (22, 28),     # Plastic
+    3: (24, 35),     # Plastic
     4: (3, 8),      # Trash
 }
 
