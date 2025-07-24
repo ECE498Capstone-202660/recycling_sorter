@@ -10,8 +10,8 @@ from mobilenet import MaterialClassifier  # Use your own model definition
 # === 1. Setup ===
 CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
 MODEL_PATH = "best_cm_model.pth"
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cpu")
 print("Using device:", DEVICE)
 
 # === 2. Image transform ===
