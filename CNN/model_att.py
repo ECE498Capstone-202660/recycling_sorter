@@ -44,7 +44,7 @@ class ResidualBlockAtt(nn.Module):
         out += identity
         return self.relu(out)
 
-class MaterialClassifierAtt(nn.Module):
+class MaterialClassifier(nn.Module):
     def __init__(self, num_classes=5):
         super().__init__()
         self.features = nn.Sequential(
