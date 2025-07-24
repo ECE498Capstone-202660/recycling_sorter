@@ -1,45 +1,74 @@
 import torch
 import torch.nn as nn
 
-class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1):
-        super(DepthwiseSeparableConv, self).__init__()
-        self.depthwise = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=stride,
-                      padding=1, groups=in_channels, bias=False),
-            nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True)
-        )
-        self.pointwise = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, downsample=False):
+        super(ResidualBlock, self).__init__()
+        stride = 2 if downsample else 1
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels)
         )
+
+        self.skip = nn.Sequential()
+        if downsample or in_channels != out_channels:
+            self.skip = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        return x
+        identity = self.skip(x)
+        out = self.conv(x)
+        out += identity
+        return self.relu(out)
 
 class MaterialClassifier(nn.Module):
-    def __init__(self, num_classes=6):
+    def __init__(self, num_classes=5):
         super(MaterialClassifier, self).__init__()
 
         self.initial = nn.Sequential(
-            nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True)
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         )
 
-        self.block1 = DepthwiseSeparableConv(16, 32, stride=1)
-        self.block2 = DepthwiseSeparableConv(32, 64, stride=2)
-        self.block3 = DepthwiseSeparableConv(64, 128, stride=2)
-        self.block4 = DepthwiseSeparableConv(128, 256, stride=2)
+        # Deeper network: 4 residual stages, each with 3 blocks
+        self.layer1 = nn.Sequential(
+            ResidualBlock(64, 128, downsample=True),
+            ResidualBlock(128, 128),
+            ResidualBlock(128, 128)
+        )
+        self.layer2 = nn.Sequential(
+            ResidualBlock(128, 256, downsample=True),
+            ResidualBlock(256, 256),
+            ResidualBlock(256, 256)
+        )
+        self.layer3 = nn.Sequential(
+            ResidualBlock(256, 512, downsample=True),
+            ResidualBlock(512, 512),
+            ResidualBlock(512, 512)
+        )
+        self.layer4 = nn.Sequential(
+            ResidualBlock(512, 1024, downsample=True),
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024)
+        )
 
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.classifier = nn.Sequential(
-            nn.Linear(256 + 1, 128),
+            nn.Linear(1024 + 1, 512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(512, 128),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
             nn.Linear(128, num_classes)
@@ -47,11 +76,11 @@ class MaterialClassifier(nn.Module):
 
     def forward(self, x, weight):
         x = self.initial(x)
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = self.block4(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         x = self.pool(x)
-        x = x.view(x.size(0), -1)  # shape: (batch_size, 256)
-        x = torch.cat((x, weight), dim=1)  # concat auxiliary weight (batch_size, 1)
+        x = x.view(x.size(0), -1)
+        x = torch.cat((x, weight), dim=1)
         return self.classifier(x)

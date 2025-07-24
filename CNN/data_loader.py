@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
@@ -6,13 +7,13 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import random
 
+# Updated CATEGORY_WEIGHTS and removed Cardboard
 CATEGORY_WEIGHTS = {
-    0: (30, 60),     # Cardboard
-    1: (100, 200),   # Glass
-    2: (10, 30),     # Metal
-    3: (4, 6),       # Paper
-    4: (10, 30),     # Plastic
-    5: (5, 50),      # Trash
+    0: (100, 260),   # Glass
+    1: (14, 18),     # Metal
+    2: (5, 12),      # Paper
+    3: (22, 28),     # Plastic
+    4: (3, 8),      # Trash
 }
 
 class WasteDataset(Dataset):
@@ -20,6 +21,8 @@ class WasteDataset(Dataset):
         self.data = pd.read_csv(csv_file)
         self.img_dir = img_dir
         self.transform = transform
+        self.min_weight = self.data['weight'].min()
+        self.max_weight = self.data['weight'].max()
 
     def __len__(self):
         return len(self.data)
@@ -29,19 +32,25 @@ class WasteDataset(Dataset):
         image = Image.open(img_path).convert("RGB")
         label = int(self.data.iloc[idx, 1])
         weight = float(self.data.iloc[idx, 2])
+        # Normalize weight to [0, 1]
+        norm_weight = (weight - self.min_weight) / (self.max_weight - self.min_weight + 1e-8)
         if self.transform:
             image = self.transform(image)
-        return (image, torch.tensor([weight], dtype=torch.float32)), label
+        return (image, torch.tensor([norm_weight], dtype=torch.float32)), label
 
 def _inject_weight_column(csv_path):
     df = pd.read_csv(csv_path)
     if "weight" in df.columns:
         return  # already injected
-
     weights = []
     for label in df["label"]:
         low, high = CATEGORY_WEIGHTS[label]
-        weights.append(round(random.uniform(low, high), 2))
+        mu = (low + high) / 2
+        sigma = (high - low) / 6  # 99.7% values within [low, high]
+        # Sample from Gaussian and clip to [low, high]
+        w = np.random.normal(mu, sigma)
+        w = min(max(w, low), high)
+        weights.append(round(w, 2))
     df["weight"] = weights
     df.to_csv(csv_path, index=False)
 
@@ -50,16 +59,19 @@ def get_data_loaders(data_dir, batch_size=32):
     std = [0.229, 0.224, 0.225]
 
     transform_train = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.RandomResizedCrop(256, scale=(0.7, 1.0)),  # Random crop and resize
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
-        transforms.ColorJitter(0.2, 0.2, 0.2),
+        transforms.RandomVerticalFlip(p=0.3),
+        transforms.RandomRotation(20),
+        transforms.ColorJitter(0.4, 0.4, 0.4, 0.2),
+        transforms.GaussianBlur(3, sigma=(0.1, 2.0)),
         transforms.ToTensor(),
-        transforms.Normalize(mean, std)
-    ])
+        transforms.Normalize(mean, std),
+        transforms.RandomErasing(p=0.5, scale=(0.02, 0.2), ratio=(0.3, 3.3))
+    ])  
 
     transform_eval = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((256, 256)),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])

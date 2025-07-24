@@ -5,24 +5,36 @@ import os
 import time
 import torch.nn as nn
 import pandas as pd
-from mobilenet import MaterialClassifier  # Use your own model definition
+from model_simple import MaterialClassifier
 
 # === 1. Setup ===
-CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
-MODEL_PATH = "best_cm_model.pth"
+CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
+MODEL_PATH = "best_model.pth"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# DEVICE = torch.device("cpu")
 print("Using device:", DEVICE)
 
 # === 2. Image transform ===
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((256, 256)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
 
-# === 3. Load model ===
+# === 3. Normalize weight ===
+def normalize_weight(weight, label):
+    # Use the same CATEGORY_WEIGHTS as in training
+    CATEGORY_WEIGHTS = {
+        0: (100, 260),   # Glass
+        1: (14, 18),     # Metal
+        2: (5, 12),      # Paper
+        3: (22, 28),     # Plastic
+        4: (3, 8),       # Trash
+    }
+    low, high = CATEGORY_WEIGHTS[label]
+    return (weight - low) / (high - low + 1e-8)
+
+# === 4. Load model ===
 def load_model():
     model = MaterialClassifier(num_classes=len(CATEGORIES))
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
@@ -30,11 +42,16 @@ def load_model():
     model.eval()
     return model
 
-# === 4. Predict one image with weight ===
-def predict_image(model, image_path, weight_grams):
+# === 5. Predict one image with weight ===
+def predict_image(model, image_path, weight_grams, label=None):
     img = Image.open(image_path).convert("RGB")
     img_tensor = transform(img).unsqueeze(0).to(DEVICE)
-    weight_tensor = torch.tensor([[weight_grams]], dtype=torch.float32).to(DEVICE)
+    # Normalize weight if label is provided
+    if label is not None:
+        norm_weight = normalize_weight(weight_grams, label)
+    else:
+        norm_weight = torch.tensor([[weight_grams]], dtype=torch.float32).to(DEVICE)
+    weight_tensor = torch.tensor([[norm_weight]], dtype=torch.float32).to(DEVICE)
 
     start_time = time.time()
     with torch.no_grad():
@@ -46,7 +63,7 @@ def predict_image(model, image_path, weight_grams):
     inference_time = end_time - start_time
     return CATEGORIES[pred_idx], confidence, inference_time
 
-# === 5. Evaluate test set from CSV (includes weight) ===
+# === 6. Evaluate test set from CSV (includes weight) ===
 def evaluate_test_set(model, label_csv_path, image_folder):
     df = pd.read_csv(label_csv_path)
     correct = 0
@@ -63,7 +80,7 @@ def evaluate_test_set(model, label_csv_path, image_folder):
             print(f"Warning: File {image_path} not found, skipping.")
             continue
 
-        pred_label, conf, infer_time = predict_image(model, image_path, weight)
+        pred_label, conf, infer_time = predict_image(model, image_path, weight, true_label)
 
         true_label_name = CATEGORIES[true_label]
         is_correct = (pred_label.lower() == true_label_name.lower())
@@ -82,12 +99,12 @@ def evaluate_test_set(model, label_csv_path, image_folder):
     print(f"\n✅ Test Accuracy: {accuracy:.2f}%")
     print(f"⏱️ Average Inference Time: {avg_time:.2f} ms over {total} images")
 
-# === 6. Main ===
+# === 7. Main ===
 if __name__ == "__main__":
     model = load_model()
 
     # Optional warm-up
-    _ = predict_image(model, "data/test/images/glass_478.jpg", 120.0)
+    _ = predict_image(model, "data/test/images/glass_478.jpg", 120.0, label=0)
 
     # Evaluate full test set using filename, label, and weight
     evaluate_test_set(

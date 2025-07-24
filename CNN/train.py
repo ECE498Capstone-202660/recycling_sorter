@@ -5,14 +5,14 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from mobilenet import MaterialClassifier
+from model_simple import MaterialClassifier
 from data_loader import get_data_loaders
 import os
 import pandas as pd
 
-CATEGORIES = ["Cardboard", "Glass", "Metal", "Paper", "Plastic", "Trash"]
+CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
 
-def compute_class_weights(data_dir, num_classes=6):
+def compute_class_weights(data_dir, num_classes=5):
     counts = [0] * num_classes
     for split in ["train", "val", "test"]:
         csv_file = os.path.join(data_dir, split, f"{split}_labels.csv")
@@ -109,26 +109,23 @@ def evaluate_model(model, test_loader, criterion, device):
     print(f"Test Loss: {test_loss / len(test_loader):.4f}, Test Accuracy: {acc:.2f}%")
     return preds, labels
 
-def main():
+if __name__ == '__main__':
     data_dir = "data"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}")
 
     train_loader, val_loader, test_loader = get_data_loaders(data_dir, batch_size=32)
-    class_weights = compute_class_weights(data_dir).to(device)
+    class_weights = compute_class_weights(data_dir, num_classes=5).to(device)
 
-    model = MaterialClassifier(num_classes=6).to(device)
+    model = MaterialClassifier(num_classes=5).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
 
     history = train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device)
     plot_loss_curves(history, "One Stage Classification")
 
-    model.load_state_dict(torch.load("best_cm_model.pth"))
+    model.load_state_dict(torch.load("best_model.pth"))
     preds, labels = evaluate_model(model, test_loader, criterion, device)
     plot_confusion_matrix(labels, preds, CATEGORIES, "One Stage Classification")
     print("\n" + classification_report(labels, preds, target_names=CATEGORIES))
-
-if __name__ == '__main__':
-    main()
