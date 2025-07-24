@@ -19,7 +19,7 @@ CATEGORIES = [
     "Trash-S", "Trash-L"
 ]
 
-def compute_class_weights(data_dir, num_classes=6):
+def compute_class_weights(data_dir, num_classes=12):
     counts = [0] * num_classes
     for split in ["train", "val", "test"]:
         csv_file = os.path.join(data_dir, split, f"{split}_labels.csv")

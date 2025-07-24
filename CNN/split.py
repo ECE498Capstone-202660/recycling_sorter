@@ -44,7 +44,7 @@ def split_data(original_images_dir, data_dir, train_ratio=0.7, val_ratio=0.2):
                     shutil.copy(src, dst)
 
 if __name__ == "__main__":
-    original_images_dir = "C:/Users/10640/recycling_sorter_sw/CNN/original_images"
-    data_dir = "C:/Users/10640/recycling_sorter_sw/CNN/data"
+    original_images_dir = "C:/Users/leozz/OneDrive/Desktop/ECE498/recycling_sorter/CNN/original_images"
+    data_dir = "C:/Users/leozz/OneDrive/Desktop/ECE498/recycling_sorter/CNN/data"
     split_data(original_images_dir, data_dir)
     print("Data split completed!")
