@@ -33,7 +33,7 @@ class WasteDataset(Dataset):
         label = int(self.data.iloc[idx, 1])
         weight = float(self.data.iloc[idx, 2])
         # Normalize weight to [0, 1]
-        norm_weight = 3 * (weight - self.min_weight) / (self.max_weight - self.min_weight + 1e-8)
+        norm_weight = 5 * (weight - self.min_weight) / (self.max_weight - self.min_weight + 1e-8)
         if self.transform:
             image = self.transform(image)
         return (image, torch.tensor([norm_weight], dtype=torch.float32)), label

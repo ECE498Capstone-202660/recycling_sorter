@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
-from mobilenet import MaterialClassifier
+from model1 import MaterialClassifier
 from data_loader import get_data_loaders
 import os
 import pandas as pd
@@ -37,7 +37,8 @@ def plot_loss_curves(history, title):
     plt.title(f'{title} Accuracy')
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"{title.replace(' ', '_').lower()}_training_curves.png")
+    sanitized_title = title.lower().replace(" ", "_").replace(":", "").replace("/", "_")
+    plt.savefig(f"{sanitized_title}_training_curves.png")
     plt.close()
 
 def plot_confusion_matrix(y_true, y_pred, classes, title):
@@ -48,12 +49,43 @@ def plot_confusion_matrix(y_true, y_pred, classes, title):
     plt.xlabel("Predicted")
     plt.ylabel("True")
     plt.tight_layout()
-    plt.savefig(f"{title.replace(' ', '_').lower()}_confusion_matrix.png")
+    sanitized_title = title.lower().replace(" ", "_").replace(":", "").replace("/", "_")
+    plt.savefig(f"{sanitized_title}_confusion_matrix.png")
     plt.close()
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=80):
+class EarlyStopping:
+    def __init__(self, patience=10, verbose=False, delta=0):
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_acc_max = float('-inf')
+        self.delta = delta
+
+    def __call__(self, val_acc, model, path='best_model.pth'):
+        score = val_acc
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(model, path)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(model, path)
+            self.counter = 0
+
+    def save_checkpoint(self, model, path):
+        torch.save(model.state_dict(), path)
+
+def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=100):
     best_acc = 0.0
     history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
+    early_stopper = EarlyStopping(patience=10, verbose=True)
 
     for epoch in range(num_epochs):
         model.train()
@@ -88,10 +120,10 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         history['val_acc'].append(val_acc)
 
         print(f"Epoch {epoch+1:02d}: Train Acc={train_acc:.2f}%, Val Acc={val_acc:.2f}%")
-        if val_acc > best_acc:
-            best_acc = val_acc
-            torch.save(model.state_dict(), "best_model.pth")
-            print(f" New best model saved with Val Acc={val_acc:.2f}%")
+        early_stopper(val_acc, model)
+        if early_stopper.early_stop:
+            print("Early stopping triggered.")
+            break
 
     return history
 
