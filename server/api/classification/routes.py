@@ -36,7 +36,7 @@ async def predict_model1(
 
     filename = os.path.basename(save_uploaded_image(img_bytes, image.filename))
     url = f"{DEV_BASE_URL}/static/{filename}"
-    rebate = round(random.uniform(0.1, 1.0), 2)
+    rebate = 0.1
 
     row = ClassificationLog(
         predicted_class=res["predicted_class"],
@@ -64,7 +64,7 @@ async def predict_model2(
 
     filename = os.path.basename(save_uploaded_image(img_bytes, image.filename))
     url = f"{DEV_BASE_URL}/static/{filename}"
-    rebate = round(random.uniform(0.1, 1.0), 2)
+    rebate = 0.1
 
     row = ClassificationLog(
         predicted_class=res["predicted_class"],
