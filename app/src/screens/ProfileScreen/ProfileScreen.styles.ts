@@ -91,6 +91,9 @@ const styles = StyleSheet.create({
   logoutContent: {
     paddingVertical: 6,
   },
+  loadingIndicator: {
+    marginTop: 12,
+  },
 });
 
 export default styles;

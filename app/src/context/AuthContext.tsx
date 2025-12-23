@@ -4,8 +4,13 @@ import { login as apiLogin, register as apiRegister } from "../services/api";
 
 interface AuthContextType {
   token: string | null;
+  isBootstrapped: boolean;
   login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string) => Promise<boolean>;
+  register: (
+    username: string,
+    password: string,
+    profile?: { email?: string | null; first_name?: string | null; last_name?: string | null }
+  ) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -13,17 +18,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
+  const [isBootstrapped, setIsBootstrapped] = useState(false);
 
   // Load token from AsyncStorage on mount
   useEffect(() => {
     (async () => {
-      const storedToken = await AsyncStorage.getItem("token");
-      if (storedToken) setToken(storedToken);
+      try {
+        const storedToken = await AsyncStorage.getItem("token");
+        if (storedToken) setToken(storedToken);
+      } finally {
+        setIsBootstrapped(true);
+      }
     })();
   }, []);
 
   // Save token to AsyncStorage whenever it changes
   useEffect(() => {
+    if (!isBootstrapped) return;
     if (token) {
       AsyncStorage.setItem("token", token);
     } else {
@@ -40,20 +51,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   }, []);
 
-  const register = useCallback(async (username: string, password: string) => {
-    const res = await apiRegister(username, password);
+  const register = useCallback(
+    async (
+      username: string,
+      password: string,
+      profile?: { email?: string | null; first_name?: string | null; last_name?: string | null }
+    ) => {
+      const res = await apiRegister(username, password, profile);
     if (res.token) {
       setToken(res.token);
       return true;
     }
     return false;
-  }, []);
+    },
+    []
+  );
 
   const logout = useCallback(() => setToken(null), []);
 
   const value = useMemo(
-    () => ({ token, login, register, logout }),
-    [token, login, register, logout]
+    () => ({ token, isBootstrapped, login, register, logout }),
+    [token, isBootstrapped, login, register, logout]
   );
 
   return (

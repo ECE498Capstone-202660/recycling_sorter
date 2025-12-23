@@ -1,6 +1,5 @@
 import datetime as dt
 from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.orm import relationship
 from db import Base
 
 class User(Base):
@@ -9,6 +8,9 @@ class User(Base):
     id              = Column(Integer, primary_key=True, index=True)
     username        = Column(String(64), unique=True, nullable=False, index=True)
     hashed_password = Column(String(128), nullable=False)
+    email           = Column(String(255), unique=True, nullable=True, index=True)
+    first_name      = Column(String(64), nullable=True)
+    last_name       = Column(String(64), nullable=True)
     created_at      = Column(DateTime, default=dt.datetime.utcnow)
 
     # logs = relationship(

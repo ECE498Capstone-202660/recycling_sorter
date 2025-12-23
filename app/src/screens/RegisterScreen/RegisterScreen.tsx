@@ -7,11 +7,22 @@ const RegisterScreen = ({ navigation }: any) => {
   const { register } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
 
   const handleRegister = async () => {
     setError("");
-    const success = await register(username, password);
+    const normalize = (value: string) => {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    };
+    const success = await register(username, password, {
+      first_name: normalize(firstName),
+      last_name: normalize(lastName),
+      email: normalize(email),
+    });
     if (!success) setError("Registration failed");
   };
 
@@ -24,6 +35,29 @@ const RegisterScreen = ({ navigation }: any) => {
           onChangeText={setUsername}
           style={styles.input}
           placeholderTextColor="#888"
+        />
+        <TextInput
+          placeholder="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          style={styles.input}
+          placeholderTextColor="#888"
+        />
+        <TextInput
+          placeholder="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          style={styles.input}
+          placeholderTextColor="#888"
+        />
+        <TextInput
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          style={styles.input}
+          placeholderTextColor="#888"
+          autoCapitalize="none"
+          keyboardType="email-address"
         />
         <TextInput
           placeholder="Password"

@@ -1,20 +1,67 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button, Card, Surface, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Surface, Text } from 'react-native-paper';
 import styles from './ProfileScreen.styles';
 import { useAuth } from '../../context/AuthContext';
+import { getUserMe } from '../../services/api';
+import { RootStackParamList } from '../../types/navigation';
+
+const LogoutIcon = ({ size, color }: { size: number; color: string }) => (
+  <MaterialIcons name="logout" size={size} color={color} />
+);
 
 const ProfileScreen = () => {
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [profile, setProfile] = useState({
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+  });
+  const [loading, setLoading] = useState(true);
+
+  const displayName = useMemo(() => {
+    const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+    return name || profile.username || 'Your profile';
+  }, [profile.first_name, profile.last_name, profile.username]);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await getUserMe(token);
+        setProfile({
+          username: data?.username ?? '',
+          email: data?.email ?? '',
+          first_name: data?.first_name ?? '',
+          last_name: data?.last_name ?? '',
+        });
+      } catch (err) {
+        console.error('Failed to load profile details.', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [token]);
+
   const menuItems = [
     {
       id: '1',
-      title: 'Account Settings',
+      title: 'Profile Settings',
       icon: 'person',
-      onPress: () => {},
+      onPress: () => navigation.navigate('ProfileSettings'),
     },
     {
       id: '2',
@@ -51,9 +98,9 @@ const ProfileScreen = () => {
               <MaterialIcons name="person" size={44} color="#0F6B6E" />
             </View>
             <Text variant="titleLarge" style={styles.name}>
-              John Doe
+              {displayName}
             </Text>
-            <Text style={styles.email}>john.doe@example.com</Text>
+            <Text style={styles.email}>{profile.email || 'No email on file'}</Text>
           </View>
         </LinearGradient>
 
@@ -98,12 +145,13 @@ const ProfileScreen = () => {
           onPress={logout}
           style={styles.logoutButton}
           contentStyle={styles.logoutContent}
-          icon={({ size, color }) => (
-            <MaterialIcons name="logout" size={size} color={color} />
-          )}
+          icon={LogoutIcon}
         >
           Log out
         </Button>
+        {loading ? (
+          <ActivityIndicator style={styles.loadingIndicator} size="small" color="#0F6B6E" />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

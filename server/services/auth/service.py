@@ -21,8 +21,21 @@ def sign_token(data: dict) -> str:
 def user_exists(username: str, db: Session) -> bool:
     return db.query(User).filter_by(username=username).first() is not None
 
-def add_user(username: str, password: str, db: Session) -> User:
-    user = User(username=username, hashed_password=hash_pw(password))
+def add_user(
+    username: str,
+    password: str,
+    db: Session,
+    email: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> User:
+    user = User(
+        username=username,
+        hashed_password=hash_pw(password),
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+    )
     db.add(user); db.commit(); db.refresh(user)
     return user
 

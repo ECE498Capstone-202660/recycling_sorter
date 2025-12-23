@@ -1,8 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { LinkingOptions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { RootStackParamList } from '../types/navigation';
+import { DrawerParamList, RootStackParamList } from '../types/navigation';
 import LoginScreen from "../screens/LoginScreen/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen/RegisterScreen";
 import { useAuth } from "../context/AuthContext";
@@ -11,14 +11,34 @@ import { useAuth } from "../context/AuthContext";
 import HomeScreen from '../screens/HomeScreen/HomeScreen';
 import HistoryScreen from '../screens/HistoryScreen/HistoryScreen';
 import ProfileScreen from '../screens/ProfileScreen/ProfileScreen';
+import ProfileSettingsScreen from '../screens/ProfileSettingsScreen/ProfileSettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const Drawer = createDrawerNavigator();
+const Drawer = createDrawerNavigator<DrawerParamList>();
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ['http://localhost:8081', 'http://127.0.0.1:8081', 'http://192.168.0.185:8081'],
+  config: {
+    screens: {
+      Login: 'login',
+      Register: 'register',
+      Main: {
+        screens: {
+          Home: '',
+          History: 'history',
+          Profile: 'profile',
+        },
+      },
+      ProfileSettings: 'profile/settings',
+    },
+  },
+};
 
 const MainDrawer = () => {
   return (
-    <Drawer.Navigator
-      screenOptions={{
+      <Drawer.Navigator
+        initialRouteName="Home"
+        screenOptions={{
         headerShown: true,
         headerTintColor: '#0B2F33',
         headerTitleStyle: { fontWeight: '600' },
@@ -33,13 +53,24 @@ const MainDrawer = () => {
 };
 
 const AppNavigator = () => {
-  const { token } = useAuth();
+  const { token, isBootstrapped } = useAuth();
+
+  if (!isBootstrapped) {
+    return null;
+  }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator>
         {token ? (
-          <Stack.Screen name="Home" component={MainDrawer} options={{ headerShown: false }} />
+          <>
+            <Stack.Screen name="Main" component={MainDrawer} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="ProfileSettings"
+              component={ProfileSettingsScreen}
+              options={{ title: "Profile Settings" }}
+            />
+          </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
