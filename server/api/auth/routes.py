@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -12,26 +12,26 @@ from services.auth.service import (
     get_hashed,
 )
 from schemas.auth import Token
+from schemas.user import UserCreate
 
 router = APIRouter()
 
 @router.post("/register", response_model=Token)
-def register(
-    username: str = Form(...),
-    password: str = Form(...),
-    email: str | None = Form(None),
-    first_name: str | None = Form(None),
-    last_name: str | None = Form(None),
-    db: Session = Depends(get_db),
-):
-    if user_exists(username, db):
+def register(payload: UserCreate, db: Session = Depends(get_db)):
+    if user_exists(payload.username, db):
         raise HTTPException(status_code=400, detail="Username already exists")
-    if email:
-        existing_email = db.query(User).filter_by(email=email).first()
-        if existing_email:
-            raise HTTPException(status_code=400, detail="Email already exists")
-    add_user(username, password, db, email=email, first_name=first_name, last_name=last_name)
-    return {"token": sign_token({"sub": username})}
+    existing_email = db.query(User).filter_by(email=payload.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    add_user(
+        payload.username,
+        payload.password,
+        db,
+        email=payload.email,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+    )
+    return {"token": sign_token({"sub": payload.username})}
 
 
 @router.post("/login", response_model=Token)

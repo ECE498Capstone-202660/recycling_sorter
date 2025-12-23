@@ -9,7 +9,7 @@ interface AuthContextType {
   register: (
     username: string,
     password: string,
-    profile?: { email?: string | null; first_name?: string | null; last_name?: string | null }
+    profile: { email: string; first_name: string; last_name: string }
   ) => Promise<boolean>;
   logout: () => void;
 }
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     async (
       username: string,
       password: string,
-      profile?: { email?: string | null; first_name?: string | null; last_name?: string | null }
+      profile: { email: string; first_name: string; last_name: string }
     ) => {
       const res = await apiRegister(username, password, profile);
     if (res.token) {

@@ -11,15 +11,21 @@ export async function login(username: string, password: string) {
 export async function register(
   username: string,
   password: string,
-  payload?: { email?: string | null; first_name?: string | null; last_name?: string | null }
+  payload: { email: string; first_name: string; last_name: string }
 ) {
-  const fd = new FormData();
-  fd.append("username", username);
-  fd.append("password", password);
-  if (payload?.email) fd.append("email", payload.email);
-  if (payload?.first_name) fd.append("first_name", payload.first_name);
-  if (payload?.last_name) fd.append("last_name", payload.last_name);
-  const res = await fetch(`${API_URL}/auth/register`, { method: "POST", body: fd });
+  const res = await fetch(`${API_URL}/auth/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      username,
+      password,
+      email: payload.email,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+    }),
+  });
   return res.json();
 }
 

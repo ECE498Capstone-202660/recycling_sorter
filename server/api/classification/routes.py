@@ -9,6 +9,7 @@ from services.classification.inference import (
     run_inference_model2,
 )
 import random, os
+from schemas.classification import PredictionResponse, HistoryItem
 
 router = APIRouter()
 DEV_BASE_URL = "http://localhost:8080"
@@ -22,7 +23,7 @@ def to_dict(row: ClassificationLog) -> dict:
         "rebate": row.rebate
     }
 
-@router.post("/predict/model1")
+@router.post("/predict/model1", response_model=PredictionResponse)
 async def predict_model1(
     request: Request,
     image: UploadFile = File(...),
@@ -50,7 +51,7 @@ async def predict_model1(
     db.refresh(row)
     return to_dict(row)
 
-@router.post("/predict/model2")
+@router.post("/predict/model2", response_model=PredictionResponse)
 async def predict_model2(
     request: Request,
     image: UploadFile = File(...),
@@ -78,7 +79,7 @@ async def predict_model2(
     db.refresh(row)
     return to_dict(row)
 
-@router.get("/latest")
+@router.get("/latest", response_model=list[PredictionResponse])
 def latest(db: Session = Depends(get_db)):
     rows = (
         db.query(ClassificationLog)
@@ -88,7 +89,7 @@ def latest(db: Session = Depends(get_db)):
     )
     return [to_dict(r) for r in rows]
 
-@router.get("/history")
+@router.get("/history", response_model=list[HistoryItem])
 def history(db: Session = Depends(get_db)):
     rows = (
         db.query(ClassificationLog)

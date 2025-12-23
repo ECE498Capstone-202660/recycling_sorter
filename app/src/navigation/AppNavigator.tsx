@@ -1,7 +1,12 @@
 import React from 'react';
 import { LinkingOptions, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import {
+  createDrawerNavigator,
+  DrawerContentScrollView,
+  DrawerItemList,
+} from '@react-navigation/drawer';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { DrawerParamList, RootStackParamList } from '../types/navigation';
 import LoginScreen from "../screens/LoginScreen/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen/RegisterScreen";
@@ -34,6 +39,21 @@ const linking: LinkingOptions<RootStackParamList> = {
   },
 };
 
+const CustomDrawerContent = (props: any) => {
+  const { logout } = useAuth();
+
+  return (
+    <View style={styles.drawerContainer}>
+      <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
+        <DrawerItemList {...props} />
+      </DrawerContentScrollView>
+      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+        <Text style={styles.logoutText}>Log out</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const MainDrawer = () => {
   return (
       <Drawer.Navigator
@@ -44,6 +64,7 @@ const MainDrawer = () => {
         headerTitleStyle: { fontWeight: '600' },
         drawerActiveTintColor: '#0F6B6E',
       }}
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
       <Drawer.Screen name="Home" component={HomeScreen} />
       <Drawer.Screen name="History" component={HistoryScreen} />
@@ -81,5 +102,26 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  drawerContainer: {
+    flex: 1,
+  },
+  drawerContent: {
+    paddingTop: 8,
+  },
+  logoutButton: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#0F6B6E',
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+});
 
 export default AppNavigator; 
