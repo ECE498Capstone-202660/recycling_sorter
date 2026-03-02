@@ -8,11 +8,9 @@ from services.classification.inference import (
     run_inference_model1,
     run_inference_model2,
 )
-import random, os
 from schemas.classification import PredictionResponse, HistoryItem
 
 router = APIRouter()
-DEV_BASE_URL = "http://localhost:8080"
 
 def to_dict(row: ClassificationLog) -> dict:
     return {
@@ -35,8 +33,7 @@ async def predict_model1(
     tensor = preprocess_image(img_bytes)
     res = run_inference_model1(tensor, weight_grams=weight)
 
-    filename = os.path.basename(save_uploaded_image(img_bytes, image.filename))
-    url = f"{DEV_BASE_URL}/static/{filename}"
+    url = save_uploaded_image(img_bytes, image.filename)
     rebate = 0.1
 
     row = ClassificationLog(
@@ -63,8 +60,7 @@ async def predict_model2(
     tensor = preprocess_image(img_bytes)
     res = run_inference_model2(tensor, weight_grams=weight)
 
-    filename = os.path.basename(save_uploaded_image(img_bytes, image.filename))
-    url = f"{DEV_BASE_URL}/static/{filename}"
+    url = save_uploaded_image(img_bytes, image.filename)
     rebate = 0.1
 
     row = ClassificationLog(

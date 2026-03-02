@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from db import Base, engine
 from api.auth.routes import router as auth_router
 from api.classification.routes import router as classification_router
@@ -27,5 +26,3 @@ app.include_router(auth_router, prefix="/auth")
 app.include_router(classification_router, prefix="/classification")
 app.include_router(rebate_router, prefix="/rebate")
 app.include_router(user_router, prefix="/user")
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
