@@ -15,7 +15,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8081",
-        "http://192.168.0.185:8081"
+        "http://192.168.0.185:8081",
+        "https://recycling-sorter.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
