@@ -34,7 +34,7 @@ def _predict(model, device, tensor, grams):
         }
 
 def run_inference_model(tensor, weight_grams):
-    device = torch.device("mps")
+    device = torch.device("cpu")
     m = MobileNetWithMass(len(CATEGORIES), pretrained=False)
     m.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     m.eval().to(device)

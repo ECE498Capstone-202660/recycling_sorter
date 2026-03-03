@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8080";
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080";
 
 type AuthErrorHandler = (status: number) => void;
 let authErrorHandler: AuthErrorHandler | null = null;

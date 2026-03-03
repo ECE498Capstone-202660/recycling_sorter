@@ -5,11 +5,15 @@ import os
 
 load_dotenv(find_dotenv())
 
-DB_URL = (
-    f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}"
-    f"@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/"
-    f"{os.getenv('MYSQL_DATABASE')}"
-)
+url = os.getenv("MYSQL_URL")
+if not url:
+    raise RuntimeError("Missing database environment variable: MYSQL_URL")
+
+# Ensure SQLAlchemy uses PyMySQL driver
+if url.startswith("mysql://"):
+    url = url.replace("mysql://", "mysql+pymysql://", 1)
+
+DB_URL = url
 
 engine = create_engine(DB_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
