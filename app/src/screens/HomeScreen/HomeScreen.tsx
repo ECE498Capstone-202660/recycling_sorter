@@ -70,7 +70,7 @@ const HomeScreen = ({ navigation }: any) => {
     },
     done: {
       title: "Complete",
-      subtitle: "Review the latest result and continue if needed.",
+      subtitle: "Review the latest result.",
     },
     busy: {
       title: "Kiosk busy",
@@ -99,19 +99,12 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleContinue = async () => {
+  const handleFinish = async () => {
     if (token && jobId != null) {
       await acknowledgeSorting(token, jobId);
     }
     setRecyclingStatus("idle");
     setJobId(null);
-  };
-
-  const handleFinish = async () => {
-    if (token && jobId != null) {
-      await acknowledgeSorting(token, jobId);
-    }
-    logout();
   };
 
   const isTrash = latest?.predicted_class === "Trash";
@@ -143,9 +136,6 @@ const HomeScreen = ({ navigation }: any) => {
             </Chip>
           </View>
           <View style={styles.resultActions}>
-            <Button mode="contained" onPress={handleContinue} style={styles.primaryButton}>
-              {isTrash ? "Take back" : "Continue"}
-            </Button>
             <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
               Finish
             </Button>

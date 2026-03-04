@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+    justifyContent: 'flex-start',
   },
   centerBlock: {
     alignItems: 'center',

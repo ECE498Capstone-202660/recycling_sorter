@@ -11,6 +11,7 @@ from services.classification.inference import preprocess_image, run_inference_mo
 router = APIRouter()
 MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
 JOB_TIMEOUT_SECONDS = 180
+DONE_TIMEOUT_SECONDS = 15
 
 
 def _require_machine_token(x_machine_token: str | None) -> None:
@@ -52,6 +53,20 @@ def kiosk_status(
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
     now = dt.datetime.utcnow()
+    expired_done = (
+        db.query(SortingJob)
+        .filter(
+            SortingJob.status == "done",
+            SortingJob.completed_at.isnot(None),
+            SortingJob.completed_at < (now - dt.timedelta(seconds=DONE_TIMEOUT_SECONDS)),
+        )
+        .all()
+    )
+    if expired_done:
+        for job in expired_done:
+            job.status = "acknowledged"
+        db.commit()
+
     pending = (
         db.query(SortingJob)
         .filter(SortingJob.status == "awaiting_user", SortingJob.user_id.is_(None))
