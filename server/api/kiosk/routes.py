@@ -22,10 +22,11 @@ def _get_lock(db: Session) -> KioskLock:
 
 
 def _clear_lock(lock: KioskLock) -> None:
+    now = dt.datetime.utcnow()
     lock.is_locked = False
     lock.locked_by_user_id = None
-    lock.locked_at = None
     lock.expires_at = None
+    lock.updated_at = now
 
 
 def _is_expired(lock: KioskLock, now: dt.datetime) -> bool:
@@ -50,7 +51,7 @@ def kiosk_status(
     if not lock.is_locked:
         return {"status": "idle"}
     if lock.locked_by_user_id == user.id:
-        return {"status": "active", "locked_at": lock.locked_at}
+        return {"status": "active", "locked_at": lock.updated_at}
     return {"status": "busy"}
 
 
@@ -73,10 +74,10 @@ def kiosk_start(
 
     lock.is_locked = True
     lock.locked_by_user_id = user.id
-    lock.locked_at = now
+    lock.updated_at = now
     lock.expires_at = now + dt.timedelta(seconds=LOCK_TTL_SECONDS)
     db.commit()
-    return {"status": "active", "locked_at": lock.locked_at}
+    return {"status": "active", "locked_at": lock.updated_at}
 
 
 @router.post("/kiosk/stop")
@@ -95,5 +96,6 @@ def kiosk_stop(
         raise HTTPException(status_code=403, detail="Not lock owner")
 
     _clear_lock(lock)
+    lock.updated_at = dt.datetime.utcnow()
     db.commit()
     return {"status": "idle"}
