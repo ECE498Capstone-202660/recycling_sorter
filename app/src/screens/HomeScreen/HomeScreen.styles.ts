@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F6F4',
     padding: 24,
     gap: 14,
-    minHeight: 800,
+    minHeight: 480,
     justifyContent: 'space-between',
   },
   recyclingCardHeader: {
