@@ -7,6 +7,7 @@ class PredictionResponse(BaseModel):
     raw_output: List[List[float]]
     image_url: str
     rebate: float
+    created_at: str
 
 
 class HistoryItem(BaseModel):

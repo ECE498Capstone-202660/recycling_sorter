@@ -3,14 +3,14 @@ import { View, ScrollView, Image, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Card, Text, Button, Surface, Chip, IconButton } from "react-native-paper";
+import { Card, Text, Button, Surface, Chip } from "react-native-paper";
 import styles from "./HomeScreen.styles";
 import { useLatestResults } from "../../hooks/useLatestResults";
 import { useAuth } from "../../context/AuthContext";
 import { useHistorySummary } from "../../hooks/useHistorySummary";
-import { acceptSorting, acknowledgeSorting, getSortingStatus } from "../../services/api";
+import { getSortingStatus, startRecycling, stopRecycling } from "../../services/api";
 
-type RecyclingStatus = "idle" | "awaiting_user" | "queued" | "processing" | "done" | "busy";
+type RecyclingStatus = "idle" | "active" | "busy";
 
 const HomeScreen = ({ navigation }: any) => {
   const { token, logout } = useAuth();
@@ -18,7 +18,7 @@ const HomeScreen = ({ navigation }: any) => {
   const { count: itemCount, totalRebate } = useHistorySummary(token);
   const [recyclingStatus, setRecyclingStatus] = useState<RecyclingStatus>("idle");
   const [statusLoading, setStatusLoading] = useState(true);
-  const [jobId, setJobId] = useState<number | null>(null);
+  const [lockStartedAt, setLockStartedAt] = useState<string | null>(null);
 
   const latest = useMemo(() => (results.length > 0 ? results[0] : null), [results]);
 
@@ -27,7 +27,7 @@ const HomeScreen = ({ navigation }: any) => {
     if (!token) {
       setRecyclingStatus("idle");
       setStatusLoading(false);
-      setJobId(null);
+      setLockStartedAt(null);
       return;
     }
 
@@ -37,7 +37,7 @@ const HomeScreen = ({ navigation }: any) => {
         if (!mounted) return;
         const nextStatus = (data?.status as RecyclingStatus) || "idle";
         setRecyclingStatus(nextStatus);
-        setJobId(typeof data?.job_id === "number" ? data.job_id : null);
+        setLockStartedAt(typeof data?.locked_at === "string" ? data.locked_at : null);
       } finally {
         if (mounted) setStatusLoading(false);
       }
@@ -54,23 +54,11 @@ const HomeScreen = ({ navigation }: any) => {
   const statusLabelMap: Record<RecyclingStatus, { title: string; subtitle: string }> = {
     idle: {
       title: "Kiosk idle",
-      subtitle: "Place an item in the slot to begin recycling.",
+      subtitle: "Tap start to begin a recycling session.",
     },
-    awaiting_user: {
-      title: "Item detected",
-      subtitle: "Tap to confirm and start recycling.",
-    },
-    queued: {
-      title: "Queued",
-      subtitle: "The machine is getting ready.",
-    },
-    processing: {
-      title: "Recycling",
-      subtitle: "Processing the current item now.",
-    },
-    done: {
-      title: "Complete",
-      subtitle: "Review the latest result.",
+    active: {
+      title: "Session active",
+      subtitle: "Kiosk is ready to process items.",
     },
     busy: {
       title: "Kiosk busy",
@@ -80,31 +68,35 @@ const HomeScreen = ({ navigation }: any) => {
 
   const statusToneMap: Record<RecyclingStatus, { bg: string; text: string }> = {
     idle: { bg: "#E3F1EE", text: "#0F6B6E" },
-    awaiting_user: { bg: "#FFF0D9", text: "#8B5E00" },
-    queued: { bg: "#E6EDF9", text: "#2A4C8B" },
-    processing: { bg: "#DFF3E4", text: "#1D6C3B" },
-    done: { bg: "#E9E4F8", text: "#4B2B8B" },
+    active: { bg: "#DFF3E4", text: "#1D6C3B" },
     busy: { bg: "#FBE2E2", text: "#8B2B2B" },
   };
 
   const statusLabel = statusLabelMap[recyclingStatus];
   const statusTone = statusToneMap[recyclingStatus];
-  const showResult = recyclingStatus === "done";
+  const showResult = recyclingStatus === "active";
+  const latestTimestamp = latest?.created_at ? new Date(latest.created_at).getTime() : null;
+  const lockTimestamp = lockStartedAt ? new Date(lockStartedAt).getTime() : null;
+  const hasSessionResult =
+    showResult && latestTimestamp != null && lockTimestamp != null && latestTimestamp >= lockTimestamp;
 
-  const handleAccept = async () => {
-    if (!token || jobId == null) return;
-    const res = await acceptSorting(token, jobId);
+  const handleStart = async () => {
+    if (!token) return;
+    const res = await startRecycling(token);
     if (res.ok) {
-      setRecyclingStatus("queued");
+      setRecyclingStatus("active");
+      setLockStartedAt(res.data?.locked_at ?? null);
+    } else if (res.status === 423) {
+      setRecyclingStatus("busy");
     }
   };
 
   const handleFinish = async () => {
-    if (token && jobId != null) {
-      await acknowledgeSorting(token, jobId);
+    if (token) {
+      await stopRecycling(token);
     }
     setRecyclingStatus("idle");
-    setJobId(null);
+    setLockStartedAt(null);
   };
 
   const isTrash = latest?.predicted_class === "Trash";
@@ -152,28 +144,13 @@ const HomeScreen = ({ navigation }: any) => {
     controlContent = <ActivityIndicator size="small" color="#0F6B6E" />;
   } else if (recyclingStatus === "idle") {
     controlContent = (
-      <Text style={styles.statusText}>
-        Waiting for the kiosk to detect an item.
-      </Text>
-    );
-  } else if (recyclingStatus === "awaiting_user") {
-    controlContent = (
       <View style={styles.centerBlock}>
-        <Text style={styles.statusTitle}>Item detected</Text>
-        <Text style={styles.statusText}>Start recycling this item?</Text>
-        <Button mode="contained" onPress={handleAccept} style={styles.primaryButton}>
-          Start recycling
-        </Button>
-      </View>
-    );
-  } else if (recyclingStatus === "queued" || recyclingStatus === "processing") {
-    controlContent = (
-      <View style={styles.centerBlock}>
-        <Text style={styles.statusTitle}>Recycling in progress</Text>
         <Text style={styles.statusText}>
-          Please wait while the kiosk processes the item.
+          Tap start to begin a recycling session.
         </Text>
-        <ActivityIndicator size="large" color="#0F6B6E" style={{ marginTop: 12 }} />
+        <Button mode="contained" onPress={handleStart} style={styles.primaryButton}>
+          Start recycling session
+        </Button>
       </View>
     );
   } else if (recyclingStatus === "busy") {
@@ -186,7 +163,11 @@ const HomeScreen = ({ navigation }: any) => {
       </View>
     );
   } else {
-    controlContent = null;
+    controlContent = (
+      <View style={styles.centerBlock}>
+        <Text style={styles.statusText}>Waiting for the kiosk result...</Text>
+      </View>
+    );
   }
 
   return (
@@ -235,7 +216,7 @@ const HomeScreen = ({ navigation }: any) => {
                 </View>
               </View>
               {controlContent}
-              {showResult ? (
+              {hasSessionResult ? (
                 <View style={styles.resultInline}>
                   {latestContent}
                 </View>

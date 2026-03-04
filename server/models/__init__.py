@@ -1,5 +1,5 @@
 from .user import User
 from .classification import ClassificationLog
-from .sorting_job import SortingJob
+from .kiosk_lock import KioskLock
 
-__all__ = ["User", "ClassificationLog", "SortingJob"]
+__all__ = ["User", "ClassificationLog", "KioskLock"]

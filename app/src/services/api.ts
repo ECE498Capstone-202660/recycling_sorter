@@ -8,7 +8,7 @@ export function setAuthErrorHandler(handler: AuthErrorHandler | null) {
 }
 
 async function handleAuthError(res: Response) {
-  if (res.status === 401 || res.status === 423) {
+  if (res.status === 401) {
     authErrorHandler?.(res.status);
   }
 }
@@ -94,32 +94,24 @@ export async function getSortingStatus(token: string) {
   return res.json();
 }
 
-export async function acceptSorting(token: string, jobId: number) {
-  const fd = new FormData();
-  fd.append("job_id", String(jobId));
-  const res = await fetch(`${API_URL}/kiosk/accept`, {
+export async function startRecycling(token: string) {
+  const res = await fetch(`${API_URL}/kiosk/start`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "X-Activity": "1",
     },
-    body: fd,
   });
   await handleAuthError(res);
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
 }
 
-export async function acknowledgeSorting(token: string, jobId: number) {
-  const fd = new FormData();
-  fd.append("job_id", String(jobId));
-  const res = await fetch(`${API_URL}/kiosk/ack`, {
+export async function stopRecycling(token: string) {
+  const res = await fetch(`${API_URL}/kiosk/stop`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "X-Activity": "1",
     },
-    body: fd,
   });
   await handleAuthError(res);
   const data = await res.json().catch(() => ({}));
