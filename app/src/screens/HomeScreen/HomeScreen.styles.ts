@@ -99,6 +99,10 @@ const styles = StyleSheet.create({
     color: '#0F6B6E',
     marginBottom: 8,
   },
+  resultWarning: {
+    color: '#8B2B2B',
+    marginBottom: 8,
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

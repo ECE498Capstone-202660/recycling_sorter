@@ -175,7 +175,14 @@ async def machine_result(
     res = run_inference_model(tensor, weight_grams=weight)
 
     url = save_uploaded_image(img_bytes, image.filename)
-    rebate = 0.1
+    rebate_by_category = {
+        "Glass": 0.10,
+        "Metal": 0.10,
+        "Paper": 0.10,
+        "Plastic": 0.10,
+        "Trash": 0.00,
+    }
+    rebate = rebate_by_category.get(res["predicted_class"], 0.0)
 
     row = ClassificationLog(
         user_id=job.user_id,
