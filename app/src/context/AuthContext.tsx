@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as apiLogin, register as apiRegister, setAuthErrorHandler, getKioskStatus } from "../services/api";
+import { login as apiLogin, register as apiRegister, setAuthErrorHandler } from "../services/api";
 
 interface AuthContextType {
   token: string | null;
@@ -28,14 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     (async () => {
       try {
         const storedToken = await AsyncStorage.getItem("token");
-        if (storedToken) {
-          const status = await getKioskStatus().catch(() => ({ is_locked: true }));
-          if (status?.is_locked) {
-            setToken(storedToken);
-          } else {
-            await AsyncStorage.removeItem("token");
-          }
-        }
+        if (storedToken) setToken(storedToken);
       } finally {
         setIsBootstrapped(true);
       }

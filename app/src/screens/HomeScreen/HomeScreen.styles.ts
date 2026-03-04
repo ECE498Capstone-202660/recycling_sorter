@@ -76,11 +76,9 @@ const styles = StyleSheet.create({
     color: '#7C8B8C',
     marginTop: 12,
   },
-  carouselRow: {
-    flexDirection: 'row',
+  singleImageWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
   },
   previewImage: {
     width: 300,
@@ -109,16 +107,76 @@ const styles = StyleSheet.create({
   infoChip: {
     backgroundColor: '#FFFFFF',
   },
-  feedbackRow: {
+  resultActions: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 12,
+    gap: 12,
+    marginTop: 16,
+  },
+  centerBlock: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0B2F33',
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#567177',
+    textAlign: 'center',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
   },
   primaryButton: {
     borderRadius: 14,
   },
   primaryButtonContent: {
     paddingVertical: 6,
+  },
+  secondaryButton: {
+    borderRadius: 14,
+    borderColor: '#0F6B6E',
+  },
+  recyclingCard: {
+    borderRadius: 18,
+    backgroundColor: '#F0F6F4',
+    padding: 24,
+    gap: 14,
+    minHeight: 800,
+    justifyContent: 'space-between',
+  },
+  recyclingCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  resultInline: {
+    marginTop: 16,
+  },
+  recyclingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0B2F33',
+  },
+  recyclingSubtitle: {
+    marginTop: 6,
+    color: '#5C7375',
+    maxWidth: 240,
   },
   tipRow: {
     flexDirection: 'row',

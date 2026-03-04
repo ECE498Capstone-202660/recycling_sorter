@@ -66,7 +66,11 @@ const MainDrawer = () => {
       }}
         drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
-      <Drawer.Screen name="Home" component={HomeScreen} />
+      <Drawer.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ title: "Recycling Station" }}
+      />
       <Drawer.Screen name="History" component={HistoryScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>

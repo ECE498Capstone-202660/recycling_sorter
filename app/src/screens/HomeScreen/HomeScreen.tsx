@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { View, ScrollView, Image, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -8,70 +8,189 @@ import styles from "./HomeScreen.styles";
 import { useLatestResults } from "../../hooks/useLatestResults";
 import { useAuth } from "../../context/AuthContext";
 import { useHistorySummary } from "../../hooks/useHistorySummary";
+import { acceptSorting, acknowledgeSorting, getSortingStatus } from "../../services/api";
+
+type RecyclingStatus = "idle" | "awaiting_user" | "queued" | "processing" | "done" | "busy";
 
 const HomeScreen = ({ navigation }: any) => {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const { results, loading } = useLatestResults(token);
   const { count: itemCount, totalRebate } = useHistorySummary(token);
-  const [current, setCurrent] = useState(0);
+  const [recyclingStatus, setRecyclingStatus] = useState<RecyclingStatus>("idle");
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [jobId, setJobId] = useState<number | null>(null);
+
+  const latest = useMemo(() => (results.length > 0 ? results[0] : null), [results]);
 
   useEffect(() => {
-    if (current >= results.length) {
-      setCurrent(0);
+    let mounted = true;
+    if (!token) {
+      setRecyclingStatus("idle");
+      setStatusLoading(false);
+      setJobId(null);
+      return;
     }
-  }, [results.length, current]);
 
-  const hasResults = results.length > 0;
-  const currentResult = hasResults ? results[current] : undefined;
-  const canFlip = results.length > 1;
-
-  const handleFlip = (direction: 'left' | 'right') => {
-    setCurrent((prev) => {
-      if (direction === 'left') {
-        return prev === 0 ? results.length - 1 : prev - 1;
-      } else {
-        return prev === results.length - 1 ? 0 : prev + 1;
+    const fetchStatus = async () => {
+      try {
+        const data = await getSortingStatus(token);
+        if (!mounted) return;
+        const nextStatus = (data?.status as RecyclingStatus) || "idle";
+        setRecyclingStatus(nextStatus);
+        setJobId(typeof data?.job_id === "number" ? data.job_id : null);
+      } finally {
+        if (mounted) setStatusLoading(false);
       }
-    });
+    };
+
+    fetchStatus();
+    const id = setInterval(fetchStatus, 2000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, [token]);
+
+  const statusLabelMap: Record<RecyclingStatus, { title: string; subtitle: string }> = {
+    idle: {
+      title: "Kiosk idle",
+      subtitle: "Place an item in the slot to begin recycling.",
+    },
+    awaiting_user: {
+      title: "Item detected",
+      subtitle: "Tap to confirm and start recycling.",
+    },
+    queued: {
+      title: "Queued",
+      subtitle: "The machine is getting ready.",
+    },
+    processing: {
+      title: "Recycling",
+      subtitle: "Processing the current item now.",
+    },
+    done: {
+      title: "Complete",
+      subtitle: "Review the latest result and continue if needed.",
+    },
+    busy: {
+      title: "Kiosk busy",
+      subtitle: "Another user is recycling right now.",
+    },
+  };
+
+  const statusToneMap: Record<RecyclingStatus, { bg: string; text: string }> = {
+    idle: { bg: "#E3F1EE", text: "#0F6B6E" },
+    awaiting_user: { bg: "#FFF0D9", text: "#8B5E00" },
+    queued: { bg: "#E6EDF9", text: "#2A4C8B" },
+    processing: { bg: "#DFF3E4", text: "#1D6C3B" },
+    done: { bg: "#E9E4F8", text: "#4B2B8B" },
+    busy: { bg: "#FBE2E2", text: "#8B2B2B" },
+  };
+
+  const statusLabel = statusLabelMap[recyclingStatus];
+  const statusTone = statusToneMap[recyclingStatus];
+  const showResult = recyclingStatus === "done";
+
+  const handleAccept = async () => {
+    if (!token || jobId == null) return;
+    const res = await acceptSorting(token, jobId);
+    if (res.ok) {
+      setRecyclingStatus("queued");
+    }
+  };
+
+  const handleContinue = async () => {
+    if (token && jobId != null) {
+      await acknowledgeSorting(token, jobId);
+    }
+    setRecyclingStatus("idle");
+    setJobId(null);
+  };
+
+  const handleFinish = async () => {
+    if (token && jobId != null) {
+      await acknowledgeSorting(token, jobId);
+    }
+    logout();
   };
 
   let latestContent: React.ReactNode;
   if (loading) {
     latestContent = <ActivityIndicator size="large" color="#0F6B6E" style={{ marginTop: 16 }} />;
-  } else if (hasResults && currentResult) {
+  } else if (latest) {
     latestContent = (
       <View>
-        <View style={styles.carouselRow}>
-          {canFlip && (
-            <IconButton icon="chevron-left" size={28} onPress={() => handleFlip("left")} />
-          )}
-          <Image source={{ uri: currentResult.image_url }} style={styles.previewImage} />
-          {canFlip && (
-            <IconButton icon="chevron-right" size={28} onPress={() => handleFlip("right")} />
-          )}
+        <View style={styles.singleImageWrap}>
+          <Image source={{ uri: latest.image_url }} style={styles.previewImage} />
         </View>
         <View style={styles.resultPanel}>
           <Text style={styles.resultTitle}>Classification result</Text>
           <View style={styles.chipRow}>
             <Chip icon="recycle" style={styles.infoChip}>
-              {currentResult.predicted_class}
+              {latest.predicted_class}
             </Chip>
             <Chip icon="cash" style={styles.infoChip}>
-              ${currentResult.rebate?.toFixed(2) ?? "--"}
+              ${latest.rebate?.toFixed(2) ?? "--"}
             </Chip>
             <Chip icon="signal" style={styles.infoChip}>
-              {currentResult.confidence ?? "--"}
+              {latest.confidence ?? "--"}
             </Chip>
           </View>
-          <View style={styles.feedbackRow}>
-            <IconButton icon="thumb-up-outline" onPress={() => {}} />
-            <IconButton icon="thumb-down-outline" onPress={() => {}} />
+          <View style={styles.resultActions}>
+            <Button mode="contained" onPress={handleContinue} style={styles.primaryButton}>
+              Continue
+            </Button>
+            <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
+              Finish
+            </Button>
           </View>
         </View>
       </View>
     );
   } else {
     latestContent = <Text style={styles.emptyState}>No image classified yet.</Text>;
+  }
+
+  let controlContent: React.ReactNode;
+  if (statusLoading) {
+    controlContent = <ActivityIndicator size="small" color="#0F6B6E" />;
+  } else if (recyclingStatus === "idle") {
+    controlContent = (
+      <Text style={styles.statusText}>
+        Waiting for the kiosk to detect an item.
+      </Text>
+    );
+  } else if (recyclingStatus === "awaiting_user") {
+    controlContent = (
+      <View style={styles.centerBlock}>
+        <Text style={styles.statusTitle}>Item detected</Text>
+        <Text style={styles.statusText}>Start recycling this item?</Text>
+        <Button mode="contained" onPress={handleAccept} style={styles.primaryButton}>
+          Start recycling
+        </Button>
+      </View>
+    );
+  } else if (recyclingStatus === "queued" || recyclingStatus === "processing") {
+    controlContent = (
+      <View style={styles.centerBlock}>
+        <Text style={styles.statusTitle}>Recycling in progress</Text>
+        <Text style={styles.statusText}>
+          Please wait while the kiosk processes the item.
+        </Text>
+        <ActivityIndicator size="large" color="#0F6B6E" style={{ marginTop: 12 }} />
+      </View>
+    );
+  } else if (recyclingStatus === "busy") {
+    controlContent = (
+      <View style={styles.centerBlock}>
+        <Text style={styles.statusTitle}>Kiosk busy</Text>
+        <Text style={styles.statusText}>
+          Another user is currently recycling. Please wait.
+        </Text>
+      </View>
+    );
+  } else {
+    controlContent = null;
   }
 
   return (
@@ -81,7 +200,7 @@ const HomeScreen = ({ navigation }: any) => {
           <View style={styles.heroAccent} />
           <View style={styles.heroContent}>
             <Text variant="headlineMedium" style={styles.heroTitle}>
-              Recycling Sorter
+              Recycling Station
             </Text>
             <Text variant="bodyMedium" style={styles.heroSubtitle}>
               Make recycling feel effortless with quick, reliable results.
@@ -107,33 +226,25 @@ const HomeScreen = ({ navigation }: any) => {
 
         <Card style={styles.sectionCard}>
           <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Latest classifications
-              </Text>
-              <Text style={styles.sectionSubtitle}>Top 3 from your recent scans</Text>
-            </View>
-            {latestContent}
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.sectionCard}>
-          <Card.Content>
-            <View style={styles.sectionHeader}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Quick actions
-              </Text>
-              <Text style={styles.sectionSubtitle}>Jump back into your activity</Text>
-            </View>
-            <Button
-              mode="contained"
-              icon="history"
-              style={styles.primaryButton}
-              contentStyle={styles.primaryButtonContent}
-              onPress={() => navigation.navigate("History")}
-            >
-              View history
-            </Button>
+            <Surface style={styles.recyclingCard} elevation={0}>
+              <View style={styles.recyclingCardHeader}>
+                <View>
+                  <Text style={styles.recyclingTitle}>{statusLabel.title}</Text>
+                  <Text style={styles.recyclingSubtitle}>{statusLabel.subtitle}</Text>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: statusTone.bg }]}>
+                  <Text style={[styles.statusPillText, { color: statusTone.text }]}>
+                    {recyclingStatus.replace("_", " ")}
+                  </Text>
+                </View>
+              </View>
+              {controlContent}
+              {showResult ? (
+                <View style={styles.resultInline}>
+                  {latestContent}
+                </View>
+              ) : null}
+            </Surface>
           </Card.Content>
         </Card>
 

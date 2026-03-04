@@ -86,7 +86,42 @@ export async function updateUserMe(
   return res.json();
 }
 
-export async function getKioskStatus() {
-  const res = await fetch(`${API_URL}/auth/kiosk/status`);
+export async function getSortingStatus(token: string) {
+  const res = await fetch(`${API_URL}/kiosk/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  await handleAuthError(res);
   return res.json();
+}
+
+export async function acceptSorting(token: string, jobId: number) {
+  const fd = new FormData();
+  fd.append("job_id", String(jobId));
+  const res = await fetch(`${API_URL}/kiosk/accept`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-Activity": "1",
+    },
+    body: fd,
+  });
+  await handleAuthError(res);
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
+export async function acknowledgeSorting(token: string, jobId: number) {
+  const fd = new FormData();
+  fd.append("job_id", String(jobId));
+  const res = await fetch(`${API_URL}/kiosk/ack`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-Activity": "1",
+    },
+    body: fd,
+  });
+  await handleAuthError(res);
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
 }
