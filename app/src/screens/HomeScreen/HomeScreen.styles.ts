@@ -99,6 +99,10 @@ const styles = StyleSheet.create({
     color: '#0F6B6E',
     marginBottom: 8,
   },
+  resultWarning: {
+    color: '#8B2B2B',
+    marginBottom: 8,
+  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -146,7 +150,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F6F4',
     padding: 24,
     gap: 14,
-    minHeight: 800,
+    minHeight: 480,
     justifyContent: 'space-between',
   },
   recyclingCardHeader: {
