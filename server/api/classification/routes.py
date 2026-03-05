@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import time
 import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Header
 from sqlalchemy.orm import Session
@@ -113,10 +114,13 @@ def _get_lock(db: Session) -> KioskLock:
 async def predict(
     image: UploadFile = File(...),
     weight: float = Form(...),
+    signal: int = Form(0),
     x_machine_token: str | None = Header(default=None, alias="X-Machine-Token"),
     db: Session = Depends(get_db)
 ):
     _require_machine_token(x_machine_token)
+    if signal not in (0, 1, 2):
+        raise HTTPException(status_code=400, detail="signal must be 0 (both), 1 (CNN only), or 2 (GPT only)")
 
     lock = _get_lock(db)
     now = dt.datetime.utcnow()
@@ -126,7 +130,6 @@ async def predict(
         lock.expires_at = None
         db.commit()
 
-    # If there's an active session, extend the lock TTL on each classification request
     if lock.is_locked and lock.locked_by_user_id:
         lock.expires_at = now + dt.timedelta(seconds=LOCK_TTL_SECONDS)
         db.commit()
@@ -140,24 +143,46 @@ async def predict(
 
     weight = weight * 0.054
     tensor = preprocess_image(img_bytes)
+    t0 = time.perf_counter()
     res = run_inference_model(tensor, weight_grams=weight)
-    print("CNN result: predicted_class=%s confidence=%s" % (res["predicted_class"], res["confidence"]))
+    cnn_elapsed = time.perf_counter() - t0
+    print("CNN result: predicted_class=%s confidence=%s (%.3fs)" % (res["predicted_class"], res["confidence"], cnn_elapsed))
 
     cnn_label = _normalize_label(res["predicted_class"])
     gpt_label: str | None = None
     gpt_conf: float | None = None
 
-    try:
-        gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
-        print("OpenAI result: label=%s confidence=%s" % (gpt_label, gpt_conf))
-    except Exception as exc:
-        # If OpenAI errors or returns no usable response, fall back to CNN result
-        print(f"OpenAI error: {exc} - falling back to CNN result")
+    if signal != 1:
+        try:
+            t0 = time.perf_counter()
+            gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
+            gpt_elapsed = time.perf_counter() - t0
+            print("OpenAI result: label=%s confidence=%s (%.3fs)" % (gpt_label, gpt_conf, gpt_elapsed))
+        except Exception as exc:
+            gpt_elapsed = time.perf_counter() - t0
+            print("OpenAI error: %s (%.3fs) - falling back to CNN result" % (exc, gpt_elapsed))
+            if signal == 2:
+                gpt_label = None
+                gpt_conf = None
 
-    use_gpt = gpt_label is not None and cnn_label != gpt_label
-    final_label = gpt_label if use_gpt else cnn_label
-    final_conf = gpt_conf if use_gpt else float(res["confidence"])
-    raw_output = [[final_conf]] if use_gpt else res["raw_output"]
+    if signal == 1:
+        final_label = cnn_label
+        final_conf = float(res["confidence"])
+        raw_output = res["raw_output"]
+    elif signal == 2:
+        if gpt_label is not None and gpt_conf is not None:
+            final_label = gpt_label
+            final_conf = gpt_conf
+            raw_output = [[final_conf]]
+        else:
+            final_label = cnn_label
+            final_conf = float(res["confidence"])
+            raw_output = res["raw_output"]
+    else:
+        use_gpt = gpt_label is not None and cnn_label != gpt_label
+        final_label = gpt_label if use_gpt else cnn_label
+        final_conf = gpt_conf if use_gpt else float(res["confidence"])
+        raw_output = [[final_conf]] if use_gpt else res["raw_output"]
 
     rebate_by_category = {
         "Glass": 0.10,
