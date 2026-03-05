@@ -57,23 +57,40 @@ def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]
 
     client = _get_openai_client()
     prompt = (
-        "Classify the object into exactly one of the following categories:\n"
-        "Glass, Metal, Paper, Plastic, Trash.\n"
-        "Return ONLY JSON with keys: label, confidence.\n"
+        "Classify the object into exactly one of these five categories:\n"
+        "- Glass: glass bottles\n"
+        "- Metal: metal bottles/cans\n"
+        "- Paper: paper\n"
+        "- Plastic: plastic bottles\n"
+        "- Trash: any other object that does not belong to the previous four\n"
+        "Return ONLY JSON with keys: label, confidence. Use exactly one of these labels: Glass, Metal, Paper, Plastic, Trash.\n"
         "confidence must be a number from 0 to 1."
     )
 
-    resp = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[{
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": prompt},
-                {"type": "input_image", "image_url": data_url},
-            ],
-        }],
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    },
+                ],
+            }
+        ],
+        response_format={"type": "json_object"},
     )
-    payload = json.loads(resp.output_text)
+
+    raw_text = (resp.choices[0].message.content or "").strip()
+    if not raw_text:
+        raise ValueError("Empty OpenAI response")
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON from OpenAI: {e}. Raw: {repr(raw_text[:300])}") from e
     label = _normalize_label(payload.get("label", ""))
     if label not in CATEGORIES:
         raise ValueError(f"Invalid label: {label}")
@@ -118,9 +135,11 @@ async def predict(
     weight = weight * 0.054
     tensor = preprocess_image(img_bytes)
     res = run_inference_model(tensor, weight_grams=weight)
+    print("CNN result: predicted_class=%s confidence=%s" % (res["predicted_class"], res["confidence"]))
 
     try:
         gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
+        print("OpenAI result: label=%s confidence=%s" % (gpt_label, gpt_conf))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"OpenAI output error: {exc}")
 
