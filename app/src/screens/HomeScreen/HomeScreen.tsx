@@ -18,6 +18,7 @@ const HomeScreen = ({ navigation }: any) => {
   const { count: itemCount, totalRebate } = useHistorySummary(token);
   const [recyclingStatus, setRecyclingStatus] = useState<RecyclingStatus>("idle");
   const [statusLoading, setStatusLoading] = useState(true);
+  const [lastSeenResultCreatedAt, setLastSeenResultCreatedAt] = useState<string | null>(null);
 
   const latest = useMemo(() => (results.length > 0 ? results[0] : null), [results]);
 
@@ -72,10 +73,17 @@ const HomeScreen = ({ navigation }: any) => {
   const statusLabel = statusLabelMap[recyclingStatus];
   const statusTone = statusToneMap[recyclingStatus];
   const showResult = recyclingStatus === "active";
-  const hasSessionResult = showResult && !!latest;
+  const hasSessionResult =
+    showResult &&
+    !!latest &&
+    (!lastSeenResultCreatedAt ||
+      (latest.created_at && new Date(latest.created_at) > new Date(lastSeenResultCreatedAt)));
 
   const handleStart = async () => {
     if (!token) return;
+    // Remember the last result we had before starting this session,
+    // so we only show results that arrive after the session starts.
+    setLastSeenResultCreatedAt(latest?.created_at ?? null);
     const res = await startRecycling(token);
     if (res.ok) {
       setRecyclingStatus("active");
@@ -89,6 +97,7 @@ const HomeScreen = ({ navigation }: any) => {
       await stopRecycling(token);
     }
     setRecyclingStatus("idle");
+    setLastSeenResultCreatedAt(null);
   };
 
   const isOthers = latest?.predicted_class === "Others" || latest?.predicted_class === "Trash";
