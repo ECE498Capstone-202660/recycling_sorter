@@ -11,6 +11,7 @@ from services.user.get_user import get_current_user
 from services.classification.image_upload import save_uploaded_image
 from services.classification.inference import preprocess_image, run_inference_model
 from openai import OpenAI
+from api.kiosk.routes import LOCK_TTL_SECONDS
 
 router = APIRouter()
 MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
@@ -123,6 +124,11 @@ async def predict(
         lock.is_locked = False
         lock.locked_by_user_id = None
         lock.expires_at = None
+        db.commit()
+
+    # If there's an active session, extend the lock TTL on each classification request
+    if lock.is_locked and lock.locked_by_user_id:
+        lock.expires_at = now + dt.timedelta(seconds=LOCK_TTL_SECONDS)
         db.commit()
 
     if not image.content_type or not image.content_type.startswith("image/"):
