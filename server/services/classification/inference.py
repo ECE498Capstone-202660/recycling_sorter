@@ -3,7 +3,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 from .mobilenet_with_mass import MobileNetWithMass
 
-CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
+CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Others"]
 ROOT = os.path.dirname(__file__)
 MODEL_PATH = os.path.join(ROOT, "model.pth")
 

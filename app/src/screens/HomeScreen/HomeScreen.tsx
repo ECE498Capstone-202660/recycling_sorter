@@ -91,7 +91,7 @@ const HomeScreen = ({ navigation }: any) => {
     setRecyclingStatus("idle");
   };
 
-  const isTrash = latest?.predicted_class === "Trash";
+  const isOthers = latest?.predicted_class === "Others" || latest?.predicted_class === "Trash";
   let latestContent: React.ReactNode;
   if (loading) {
     latestContent = <ActivityIndicator size="large" color="#0F6B6E" style={{ marginTop: 16 }} />;
@@ -103,7 +103,7 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
         <View style={styles.resultPanel}>
           <Text style={styles.resultTitle}>Classification result</Text>
-          {isTrash ? (
+          {isOthers ? (
             <Text style={styles.resultWarning}>
               This item is not recyclable. Please take it back.
             </Text>
@@ -165,6 +165,9 @@ const HomeScreen = ({ navigation }: any) => {
         ) : (
           <Text style={styles.statusText}>Listening for new results...</Text>
         )}
+        <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
+          End session
+        </Button>
       </View>
     );
   }

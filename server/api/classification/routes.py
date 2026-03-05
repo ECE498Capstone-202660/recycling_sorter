@@ -15,7 +15,7 @@ from openai import OpenAI
 router = APIRouter()
 MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
+CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Others"]
 
 _openai_client: OpenAI | None = None
 
@@ -62,8 +62,8 @@ def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]
         "- Metal: metal bottles/cans\n"
         "- Paper: paper\n"
         "- Plastic: plastic bottles\n"
-        "- Trash: any other object that does not belong to the previous four\n"
-        "Return ONLY JSON with keys: label, confidence. Use exactly one of these labels: Glass, Metal, Paper, Plastic, Trash.\n"
+        "- Others: everything that does not belong to the four categories above (glass, metal, paper, plastic)\n"
+        "Return ONLY JSON with keys: label, confidence. Use exactly one of these labels: Glass, Metal, Paper, Plastic, Others.\n"
         "confidence must be a number from 0 to 1."
     )
 
@@ -137,14 +137,18 @@ async def predict(
     res = run_inference_model(tensor, weight_grams=weight)
     print("CNN result: predicted_class=%s confidence=%s" % (res["predicted_class"], res["confidence"]))
 
+    cnn_label = _normalize_label(res["predicted_class"])
+    gpt_label: str | None = None
+    gpt_conf: float | None = None
+
     try:
         gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
         print("OpenAI result: label=%s confidence=%s" % (gpt_label, gpt_conf))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OpenAI output error: {exc}")
+        # If OpenAI errors or returns no usable response, fall back to CNN result
+        print(f"OpenAI error: {exc} - falling back to CNN result")
 
-    cnn_label = _normalize_label(res["predicted_class"])
-    use_gpt = cnn_label != gpt_label
+    use_gpt = gpt_label is not None and cnn_label != gpt_label
     final_label = gpt_label if use_gpt else cnn_label
     final_conf = gpt_conf if use_gpt else float(res["confidence"])
     raw_output = [[final_conf]] if use_gpt else res["raw_output"]
@@ -154,7 +158,7 @@ async def predict(
         "Metal": 0.10,
         "Paper": 0.10,
         "Plastic": 0.10,
-        "Trash": 0.00,
+        "Others": 0.00,
     }
     rebate = rebate_by_category.get(final_label, 0.0)
 
