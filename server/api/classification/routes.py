@@ -1,4 +1,6 @@
 import os
+import json
+import base64
 import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Header
 from sqlalchemy.orm import Session
@@ -8,9 +10,14 @@ from schemas.classification import PredictionResponse, HistoryItem
 from services.user.get_user import get_current_user
 from services.classification.image_upload import save_uploaded_image
 from services.classification.inference import preprocess_image, run_inference_model
+from openai import OpenAI
 
 router = APIRouter()
 MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Trash"]
+
+_openai_client: OpenAI | None = None
 
 def to_dict(row: ClassificationLog) -> dict:
     return {
@@ -27,6 +34,51 @@ def _require_machine_token(x_machine_token: str | None) -> None:
     if not MACHINE_TOKEN or not x_machine_token or x_machine_token != MACHINE_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid machine token")
 
+
+def _get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        if not OPENAI_API_KEY:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set")
+        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return _openai_client
+
+
+def _normalize_label(label: str) -> str:
+    for cat in CATEGORIES:
+        if label.strip().lower() == cat.lower():
+            return cat
+    return label.strip().title()
+
+
+def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]:
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    data_url = f"data:{content_type};base64,{b64}"
+
+    client = _get_openai_client()
+    prompt = (
+        "Classify the object into exactly one of the following categories:\n"
+        "Glass, Metal, Paper, Plastic, Trash.\n"
+        "Return ONLY JSON with keys: label, confidence.\n"
+        "confidence must be a number from 0 to 1."
+    )
+
+    resp = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": prompt},
+                {"type": "input_image", "image_url": data_url},
+            ],
+        }],
+    )
+    payload = json.loads(resp.output_text)
+    label = _normalize_label(payload.get("label", ""))
+    if label not in CATEGORIES:
+        raise ValueError(f"Invalid label: {label}")
+    confidence = float(payload.get("confidence", 0.0))
+    return label, confidence
 
 def _get_lock(db: Session) -> KioskLock:
     lock = db.query(KioskLock).first()
@@ -53,14 +105,30 @@ async def predict(
     if lock.is_locked and lock.expires_at and lock.expires_at <= now:
         lock.is_locked = False
         lock.locked_by_user_id = None
-        lock.locked_at = None
         lock.expires_at = None
         db.commit()
 
-    weight = weight * 0.054
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Please upload an image file.")
+
     img_bytes = await image.read()
+    if len(img_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Empty file.")
+
+    weight = weight * 0.054
     tensor = preprocess_image(img_bytes)
     res = run_inference_model(tensor, weight_grams=weight)
+
+    try:
+        gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"OpenAI output error: {exc}")
+
+    cnn_label = _normalize_label(res["predicted_class"])
+    use_gpt = cnn_label != gpt_label
+    final_label = gpt_label if use_gpt else cnn_label
+    final_conf = gpt_conf if use_gpt else float(res["confidence"])
+    raw_output = [[final_conf]] if use_gpt else res["raw_output"]
 
     rebate_by_category = {
         "Glass": 0.10,
@@ -69,15 +137,15 @@ async def predict(
         "Plastic": 0.10,
         "Trash": 0.00,
     }
-    rebate = rebate_by_category.get(res["predicted_class"], 0.0)
+    rebate = rebate_by_category.get(final_label, 0.0)
 
     if lock.is_locked and lock.locked_by_user_id:
         url = save_uploaded_image(img_bytes, image.filename)
         row = ClassificationLog(
             user_id=lock.locked_by_user_id,
-            predicted_class=res["predicted_class"],
-            confidence=res["confidence"],
-            raw_output=res["raw_output"],
+            predicted_class=final_label,
+            confidence=final_conf,
+            raw_output=raw_output,
             image_url=url,
             rebate=rebate,
         )
@@ -87,13 +155,14 @@ async def predict(
         return to_dict(row)
 
     return {
-        "predicted_class": res["predicted_class"],
-        "confidence": f"{res['confidence']*100:.2f}%",
-        "raw_output": res["raw_output"],
+        "predicted_class": final_label,
+        "confidence": f"{final_conf*100:.2f}%",
+        "raw_output": raw_output,
         "image_url": None,
         "rebate": rebate,
         "created_at": dt.datetime.utcnow().isoformat(),
     }
+
 
 @router.get("/latest", response_model=list[PredictionResponse])
 def latest(

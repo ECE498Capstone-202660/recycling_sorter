@@ -18,7 +18,6 @@ const HomeScreen = ({ navigation }: any) => {
   const { count: itemCount, totalRebate } = useHistorySummary(token);
   const [recyclingStatus, setRecyclingStatus] = useState<RecyclingStatus>("idle");
   const [statusLoading, setStatusLoading] = useState(true);
-  const [lockStartedAt, setLockStartedAt] = useState<string | null>(null);
 
   const latest = useMemo(() => (results.length > 0 ? results[0] : null), [results]);
 
@@ -27,7 +26,6 @@ const HomeScreen = ({ navigation }: any) => {
     if (!token) {
       setRecyclingStatus("idle");
       setStatusLoading(false);
-      setLockStartedAt(null);
       return;
     }
 
@@ -37,7 +35,6 @@ const HomeScreen = ({ navigation }: any) => {
         if (!mounted) return;
         const nextStatus = (data?.status as RecyclingStatus) || "idle";
         setRecyclingStatus(nextStatus);
-        setLockStartedAt(typeof data?.locked_at === "string" ? data.locked_at : null);
       } finally {
         if (mounted) setStatusLoading(false);
       }
@@ -75,17 +72,13 @@ const HomeScreen = ({ navigation }: any) => {
   const statusLabel = statusLabelMap[recyclingStatus];
   const statusTone = statusToneMap[recyclingStatus];
   const showResult = recyclingStatus === "active";
-  const latestTimestamp = latest?.created_at ? new Date(latest.created_at).getTime() : null;
-  const lockTimestamp = lockStartedAt ? new Date(lockStartedAt).getTime() : null;
-  const hasSessionResult =
-    showResult && latestTimestamp != null && lockTimestamp != null && latestTimestamp >= lockTimestamp;
+  const hasSessionResult = showResult && !!latest;
 
   const handleStart = async () => {
     if (!token) return;
     const res = await startRecycling(token);
     if (res.ok) {
       setRecyclingStatus("active");
-      setLockStartedAt(res.data?.locked_at ?? null);
     } else if (res.status === 423) {
       setRecyclingStatus("busy");
     }
@@ -96,7 +89,6 @@ const HomeScreen = ({ navigation }: any) => {
       await stopRecycling(token);
     }
     setRecyclingStatus("idle");
-    setLockStartedAt(null);
   };
 
   const isTrash = latest?.predicted_class === "Trash";
@@ -165,7 +157,14 @@ const HomeScreen = ({ navigation }: any) => {
   } else {
     controlContent = (
       <View style={styles.centerBlock}>
-        <Text style={styles.statusText}>Waiting for the kiosk result...</Text>
+        {!hasSessionResult ? (
+          <>
+            <ActivityIndicator size="small" color="#0F6B6E" />
+            <Text style={styles.statusText}>Waiting for the kiosk result...</Text>
+          </>
+        ) : (
+          <Text style={styles.statusText}>Listening for new results...</Text>
+        )}
       </View>
     );
   }

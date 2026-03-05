@@ -7,7 +7,7 @@ from services.user.get_user import get_current_user
 
 router = APIRouter()
 
-LOCK_TTL_SECONDS = 600
+LOCK_TTL_SECONDS = 180
 
 
 def _get_lock(db: Session) -> KioskLock:
