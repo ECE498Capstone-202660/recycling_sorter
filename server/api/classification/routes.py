@@ -1,7 +1,6 @@
 import os
 import json
 import base64
-import time
 import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, Header
 from sqlalchemy.orm import Session
@@ -143,10 +142,7 @@ async def predict(
 
     weight = weight * 0.054
     tensor = preprocess_image(img_bytes)
-    t0 = time.perf_counter()
     res = run_inference_model(tensor, weight_grams=weight)
-    cnn_elapsed = time.perf_counter() - t0
-    print("CNN result: predicted_class=%s confidence=%s (%.3fs)" % (res["predicted_class"], res["confidence"], cnn_elapsed))
 
     cnn_label = _normalize_label(res["predicted_class"])
     gpt_label: str | None = None
@@ -154,13 +150,8 @@ async def predict(
 
     if signal != 1:
         try:
-            t0 = time.perf_counter()
             gpt_label, gpt_conf = await _openai_classify(img_bytes, image.content_type)
-            gpt_elapsed = time.perf_counter() - t0
-            print("OpenAI result: label=%s confidence=%s (%.3fs)" % (gpt_label, gpt_conf, gpt_elapsed))
-        except Exception as exc:
-            gpt_elapsed = time.perf_counter() - t0
-            print("OpenAI error: %s (%.3fs) - falling back to CNN result" % (exc, gpt_elapsed))
+        except Exception:
             if signal == 2:
                 gpt_label = None
                 gpt_conf = None
