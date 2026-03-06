@@ -130,7 +130,7 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
           <View style={styles.resultActions}>
             <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
-              Finish
+              End session
             </Button>
           </View>
         </View>
@@ -170,13 +170,13 @@ const HomeScreen = ({ navigation }: any) => {
           <>
             <ActivityIndicator size="small" color="#0F6B6E" />
             <Text style={styles.statusText}>Waiting for the kiosk result...</Text>
+            <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
+              End session
+            </Button>
           </>
         ) : (
           <Text style={styles.statusText}>Listening for new results...</Text>
         )}
-        <Button mode="outlined" onPress={handleFinish} style={styles.secondaryButton}>
-          End session
-        </Button>
       </View>
     );
   }
