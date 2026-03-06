@@ -11,7 +11,7 @@ from schemas.classification import PredictionResponse, HistoryItem
 from services.user.get_user import get_current_user
 from services.classification.image_upload import save_uploaded_image
 from services.classification.inference import preprocess_image, run_inference_model
-from openai import OpenAI
+from openai import AsyncOpenAI
 from api.kiosk.routes import LOCK_TTL_SECONDS
 
 router = APIRouter()
@@ -19,7 +19,7 @@ MACHINE_TOKEN = os.getenv("MACHINE_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CATEGORIES = ["Glass", "Metal", "Paper", "Plastic", "Others"]
 
-_openai_client: OpenAI | None = None
+_openai_client: AsyncOpenAI | None = None
 
 def to_dict(row: ClassificationLog) -> dict:
     return {
@@ -37,12 +37,12 @@ def _require_machine_token(x_machine_token: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid machine token")
 
 
-def _get_openai_client() -> OpenAI:
+def _get_openai_client() -> AsyncOpenAI:
     global _openai_client
     if _openai_client is None:
         if not OPENAI_API_KEY:
             raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set")
-        _openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _openai_client
 
 
@@ -53,7 +53,7 @@ def _normalize_label(label: str) -> str:
     return label.strip().title()
 
 
-def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]:
+async def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     data_url = f"data:{content_type};base64,{b64}"
 
@@ -69,7 +69,7 @@ def _openai_classify(image_bytes: bytes, content_type: str) -> tuple[str, float]
         "confidence must be a number from 0 to 1."
     )
 
-    resp = client.chat.completions.create(
+    resp = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {
@@ -155,7 +155,7 @@ async def predict(
     if signal != 1:
         try:
             t0 = time.perf_counter()
-            gpt_label, gpt_conf = _openai_classify(img_bytes, image.content_type)
+            gpt_label, gpt_conf = await _openai_classify(img_bytes, image.content_type)
             gpt_elapsed = time.perf_counter() - t0
             print("OpenAI result: label=%s confidence=%s (%.3fs)" % (gpt_label, gpt_conf, gpt_elapsed))
         except Exception as exc:
